@@ -43,6 +43,10 @@ Custom domain (nowacceptingpatients.com), once purchased:
 Repo variables (Settings → Secrets and variables → Actions → Variables):
 - `SITE_URL`: set this when you add a custom domain (e.g. `https://nowacceptingpatients.com`).
   It's used for canonical URLs and the sitemap.
+- `FORMS_URL`: the Apps Script web app URL that receives the report and claim
+  forms (see `forms/Code.gs`). Submissions land in the "Now Accepting
+  submissions" Google Sheet. A daily build pulls anonymous report counts back
+  into the confidence scores.
 - `MAX_LOCATIONS`: insurer locations pulled per insurer (default 1500). Raise it
   for fuller coverage; the run gets slower.
 
@@ -74,7 +78,6 @@ the trust the site depends on.
 
 ## Before launch
 
-- Connect the report and claim forms to a backend (they currently show a demo message).
 - Add more insurers. Aetna, Anthem/Elevance and the BCBS plans publish directories
   too, but they need registration or use different endpoints.
 - Add a provider-verification flow for claimed profiles (contact via the NPPES phone or email).

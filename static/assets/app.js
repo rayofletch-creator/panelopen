@@ -69,14 +69,39 @@
     });
   }
 
-  // Report / claim forms: prefill NPI. Wire `action` to a form backend before launch.
-  var npi = new URLSearchParams(location.search).get("npi");
-  document.querySelectorAll("[data-npi], [data-demo-form] input[name=npi]").forEach(function (el) { if (npi) el.value = npi; });
-  document.querySelectorAll("[data-demo-form]").forEach(function (f) {
+  // Report / claim forms post to the Apps Script endpoint named in <meta name="forms-endpoint">.
+  var params = new URLSearchParams(location.search);
+  var endpointMeta = document.querySelector('meta[name="forms-endpoint"]');
+  var endpoint = endpointMeta && endpointMeta.content;
+  document.querySelectorAll("[data-npi], [data-form] input[name=npi]").forEach(function (el) {
+    if (params.get("npi")) el.value = params.get("npi");
+  });
+  document.querySelectorAll("[data-plan]").forEach(function (el) {
+    if (/^(free|pro|group)$/.test(params.get("plan") || "")) el.value = params.get("plan");
+  });
+  document.querySelectorAll("[data-page]").forEach(function (el) { el.value = document.referrer.slice(0, 200); });
+  document.querySelectorAll("[data-form]").forEach(function (f) {
     f.addEventListener("submit", function (ev) {
-      if (f.getAttribute("action")) return;
       ev.preventDefault();
-      f.querySelector("[data-form-msg]").textContent = "Thanks — received. (Demo: connect a form backend to store submissions.)";
+      var msg = f.querySelector("[data-form-msg]");
+      var btn = f.querySelector("button[type=submit]");
+      if (!/^\d{10}$/.test((f.elements.npi && f.elements.npi.value) || "")) {
+        msg.textContent = f.elements.kind.value === "report"
+          ? "Open this form from a provider's page using the \u201cI called\u201d button."
+          : "Enter the 10-digit NPI number.";
+        return;
+      }
+      if (!endpoint) { msg.textContent = "Submissions aren't connected yet. Please try again later."; return; }
+      btn.disabled = true;
+      msg.textContent = "Sending\u2026";
+      fetch(endpoint, { method: "POST", mode: "no-cors", body: new URLSearchParams(new FormData(f)) })
+        .then(function () {
+          f.reset();
+          msg.textContent = f.elements.kind.value === "report"
+            ? "Thank you \u2014 your report will be reflected in this provider\u2019s score within a day."
+            : "Thanks \u2014 we\u2019ll be in touch to verify your profile.";
+        })
+        .catch(function () { msg.textContent = "Couldn't send. Check your connection and try again."; btn.disabled = false; });
     });
   });
 })();

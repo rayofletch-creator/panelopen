@@ -5,6 +5,7 @@ on:
     branches: [main]
   schedule:
     - cron: "17 9 * * 1"  # Mondays 09:17 UTC: re-pull insurer data
+    - cron: "40 6 * * *"  # daily: rebuild with the latest patient reports
   workflow_dispatch:
     inputs:
       refresh:
@@ -34,11 +35,11 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Refresh provider data
-        if: github.event_name == 'schedule' || inputs.refresh
+        if: github.event.schedule == '17 9 * * 1' || inputs.refresh
         run: python3 -I pipeline/fetch.py --city Denver --state CO --payers cigna,uhc --max-locations ${{ vars.MAX_LOCATIONS || 1500 }}
 
       - name: Commit refreshed data
-        if: github.event_name == 'schedule' || inputs.refresh
+        if: github.event.schedule == '17 9 * * 1' || inputs.refresh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -46,7 +47,13 @@ jobs:
           git diff --cached --quiet || git commit -m "Refresh provider data [skip ci]"
           git push
 
+      - name: Fetch patient reports
+        if: vars.FORMS_URL != ''
+        run: curl -sfL "${{ vars.FORMS_URL }}" -o data/reports.json || echo '{}' > data/reports.json
+
       - name: Build site
+        env:
+          FORMS_URL: ${{ vars.FORMS_URL }}
         # SITE_URL repo variable overrides the GitHub Pages URL once you add a custom domain.
         run: python3 -I pipeline/build.py --site-url "${{ vars.SITE_URL || steps.pages.outputs.base_url }}"
 

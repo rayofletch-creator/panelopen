@@ -61,7 +61,7 @@ def fmt_date(s):
 
 # ---------------------------------------------------------------- merge ---
 
-def merge(raw):
+def merge(raw, reports):
     by_npi = defaultdict(list)
     for l in raw["listings"]:
         by_npi[l["npi"]].append(l)
@@ -125,9 +125,20 @@ def merge(raw):
             (len(plans) > 1, "Listed by more than one insurer"),
             (not refusing_payers or not accepting_payers, "No conflicting reports between insurers"),
         ]
+        # Patient call reports (last 90 days). One person can submit many times, so a
+        # positive needs two reports to count, while negatives can only lower the level.
+        rep = reports.get(npi) or {}
+        good = rep.get("yes", 0) + rep.get("waitlist", 0)
+        bad = rep.get("no", 0) + rep.get("oon", 0) + rep.get("wrong", 0)
+        if good or bad:
+            checks.append((good >= 2 and good > bad, f"Patients reported {good} with openings, {bad} without (last 90 days)"))
+        else:
+            checks.append((False, "No patient call reports yet"))
         score = sum(1 for ok, _ in checks if ok)
         if not accepting_payers:
             level = "none"
+        elif bad >= 2 and bad > good:
+            level = "low"
         elif not reliable_yes:
             level = "low" if score < 4 else "medium"
         elif score >= 5:
@@ -154,6 +165,7 @@ def merge(raw):
             "score": score,
             "level": level,
             "freshest": freshest,
+            "reports": rep,
         })
     level_rank = {"high": 0, "medium": 1, "low": 2, "none": 3}
     providers.sort(key=lambda p: (level_rank[p["level"]], -p["score"], p["name"]))
@@ -190,6 +202,7 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/site.css">
+{f'<meta name="forms-endpoint" content="{e(ctx["forms"])}">' if ctx["forms"] else ''}
 {ld_html}
 </head>
 <body>
@@ -402,10 +415,10 @@ def static_pages(ctx, city_path, city):
 <h2>Where the data comes from</h2>
 <ul><li><strong>Insurer provider directories.</strong> Federal interoperability rules require insurers to publish their directories as open data. We pull each insurer's in-network status and its "accepting new patients" flag directly.</li>
 <li><strong>The federal NPI registry (NPPES).</strong> Every U.S. provider has a National Provider Identifier. We use it to confirm the provider is active and to cross-check their address and phone.</li>
-<li><strong>Patient reports</strong> (coming soon). When you call a provider, tell us what happened. Reports feed straight into the score.</li>
+<li><strong>Patient reports.</strong> When you call a provider, tell us what happened. Two or more recent reports of openings add a point; repeated reports of no openings drop a listing to low confidence.</li>
 <li><strong>Provider confirmations.</strong> Providers who claim their profile can confirm availability directly.</li></ul>
 <h2>The confidence score</h2><p>Each listing gets one point for each check it passes:</p>
-<ol><li>An insurer lists them as accepting new patients</li><li>The insurer's record was refreshed in the last 90 days</li><li>Their NPI is active in the federal registry</li><li>Their office ZIP matches the federal registry</li><li>Their phone number matches the federal registry</li><li>More than one insurer lists them</li><li>Insurers don't contradict each other</li></ol>
+<ol><li>An insurer lists them as accepting new patients</li><li>The insurer's record was refreshed in the last 90 days</li><li>Their NPI is active in the federal registry</li><li>Their office ZIP matches the federal registry</li><li>Their phone number matches the federal registry</li><li>More than one insurer lists them</li><li>Insurers don't contradict each other</li><li>Recent patient call reports confirm openings</li></ol>
 <p><strong>High confidence</strong> = 5+ checks. <strong>Medium</strong> = 4. <strong>Low</strong> = 3 or fewer. Listings that no insurer marks as accepting are never shown in "accepting" results.</p>
 <p>Some insurers mark nearly every provider as accepting new patients. When an insurer's directory does that, its "accepting" flag doesn't earn a point, and those listings can't reach high confidence unless other checks back them up.</p>
 <h2>What we don't do</h2><p>We don't sell rankings. Sponsored and partner placements are always labelled, and never change a provider's confidence score or order within results.</p></article>""",
@@ -415,16 +428,16 @@ def static_pages(ctx, city_path, city):
          """<article class="prose"><h1>Your panel status, kept accurate</h1>
 <p class="lede">Insurer directories say you're accepting new patients when you're not — or hide you when you are. Claim your profile and control what patients see.</p></article>
 <div class="tiers">
-<div class="tier"><h2>Free</h2><p class="price">$0</p><ul><li>Claim and correct your listing</li><li>Toggle "accepting new patients"</li><li>Shown as provider-confirmed</li></ul><a class="btn btn-ghost" href="#claim">Claim free</a></div>
-<div class="tier tier-main"><p class="tag">Most popular</p><h2>Practice Pro</h2><p class="price">$39<span>/mo</span></p><ul><li>Everything in Free</li><li>Online booking or intake link</li><li>Weekly opening counts & waitlist</li><li>Patient call analytics</li><li>Directory-error alerts across insurers</li></ul><a class="btn" href="#claim">Start 30-day trial</a></div>
-<div class="tier"><h2>Group</h2><p class="price">$149<span>/mo</span></p><ul><li>Up to 15 clinicians</li><li>Group page & intake routing</li><li>Bulk availability updates</li><li>Labelled featured placement</li></ul><a class="btn btn-ghost" href="#claim">Talk to us</a></div>
+<div class="tier"><h2>Free</h2><p class="price">$0</p><ul><li>Claim and correct your listing</li><li>Toggle "accepting new patients"</li><li>Shown as provider-confirmed</li></ul><a class="btn btn-ghost" href="?plan=free#claim">Claim free</a></div>
+<div class="tier tier-main"><p class="tag">Most popular</p><h2>Practice Pro</h2><p class="price">$39<span>/mo</span></p><ul><li>Everything in Free</li><li>Online booking or intake link</li><li>Weekly opening counts & waitlist</li><li>Patient call analytics</li><li>Directory-error alerts across insurers</li></ul><a class="btn" href="?plan=pro#claim">Start 30-day trial</a></div>
+<div class="tier"><h2>Group</h2><p class="price">$149<span>/mo</span></p><ul><li>Up to 15 clinicians</li><li>Group page & intake routing</li><li>Bulk availability updates</li><li>Labelled featured placement</li></ul><a class="btn btn-ghost" href="?plan=group#claim">Talk to us</a></div>
 </div>
-<section class="panel" id="claim"><h2>Claim your profile</h2><form class="stack" data-demo-form><label>NPI number<input name="npi" inputmode="numeric" maxlength="10" required></label><label>Work email<input type="email" name="email" required></label><button class="btn" type="submit">Send verification</button><p class="muted small" data-form-msg>We verify ownership by contacting the phone or email on your NPI record.</p></form></section>""",
+<section class="panel" id="claim"><h2>Claim your profile</h2><form class="stack" data-form><input type="hidden" name="kind" value="claim"><input type="hidden" name="plan" data-plan value="free"><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div><label>NPI number<input name="npi" inputmode="numeric" maxlength="10" required></label><label>Work email<input type="email" name="email" required></label><button class="btn" type="submit">Send verification</button><p class="muted small" data-form-msg>We verify ownership by contacting the phone or email on your NPI record.</p></form></section>""",
          [("Home", "/"), ("For providers", "/for-providers/")])
     page(ctx, "/report/", f"Report a Call Outcome | {BRAND}",
          "Tell us whether a provider was really accepting new patients. Your report improves listings for everyone.",
          """<article class="prose"><h1>What happened when you called?</h1><p class="lede">Takes 20 seconds. No account, and we never ask about your health.</p></article>
-<section class="panel"><form class="stack" data-demo-form><input type="hidden" name="npi" data-npi>
+<section class="panel"><form class="stack" data-form><input type="hidden" name="kind" value="report"><input type="hidden" name="npi" data-npi><input type="hidden" name="page" data-page><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
 <fieldset><legend>Were they accepting new patients with your insurance?</legend>
 <label class="check"><input type="radio" name="o" value="yes" required> Yes — I booked or could book</label>
 <label class="check"><input type="radio" name="o" value="waitlist"> Waitlist only</label>
@@ -443,17 +456,17 @@ def static_pages(ctx, city_path, city):
          [("Home", "/"), ("About", "/about/")])
     page(ctx, "/privacy/", f"Privacy | {BRAND}", f"{BRAND} doesn't use ad trackers or sell personal data.",
          """<article class="prose"><h1>Privacy</h1><p class="lede">Searching for mental health care is sensitive. We built this site so nothing about your search leaves it.</p>
-<ul><li>No advertising pixels, retargeting, or third-party trackers.</li><li>No account needed to search.</li><li>Call reports store only the provider, the outcome and the date — never your name or health information.</li><li>We use privacy-friendly, cookie-free page counts only.</li></ul></article>""",
+<ul><li>No advertising pixels, retargeting, or third-party trackers.</li><li>No account needed to search.</li><li>Call reports store only the provider, the outcome, the wait time and the date — never your name or health information.</li><li>Providers who claim a profile give us a work email, used only to verify and contact them about their listing.</li><li>We use privacy-friendly, cookie-free page counts only.</li></ul></article>""",
          [("Home", "/"), ("Privacy", "/privacy/")])
 
 
-def build(raw, site, partners):
+def build(raw, site, partners, forms_url, reports):
     city, st = raw["city"], raw["state"]
     city_path = f"/{st.lower()}/{slugify(city)}/"
-    providers = merge(raw)
+    providers = merge(raw, reports)
     active = sorted({k for p in providers for k in p["plans"]})
     ctx = {"site": site.rstrip("/"), "base": urlparse(site).path.rstrip("/"), "payers": raw["payers"], "active_payers": active, "generated": raw["generated"],
-           "sitemap": [], "partners": partners}
+           "sitemap": [], "partners": partners, "forms": forms_url}
     accepting = [p for p in providers if p["level"] != "none"]
     cityname = f"{city}, {st}"
 
@@ -549,16 +562,19 @@ def build(raw, site, partners):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--site-url", default="https://nowacceptingpatients.com")
+    ap.add_argument("--forms-url", default=os.environ.get("FORMS_URL", ""), help="Apps Script web app URL (forms/Code.gs)")
     args = ap.parse_args()
     if os.path.exists(DIST):
         shutil.rmtree(DIST)
     shutil.copytree(os.path.join(ROOT, "static"), DIST)
     partners_path = os.path.join(ROOT, "data", "partners.json")
     partners = json.load(open(partners_path)) if os.path.exists(partners_path) else []
+    reports_path = os.path.join(ROOT, "data", "reports.json")
+    reports = json.load(open(reports_path)) if os.path.exists(reports_path) else {}
     for path in sorted(glob.glob(os.path.join(ROOT, "data", "raw_*.json.gz"))):
         with gzip.open(path, "rt") as f:
             raw = json.load(f)
-        providers, ctx = build(raw, args.site_url, partners)
+        providers, ctx = build(raw, args.site_url, partners, args.forms_url, reports)
         lv = defaultdict(int)
         for p in providers:
             lv[p["level"]] += 1

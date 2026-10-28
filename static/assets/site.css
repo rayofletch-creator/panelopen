@@ -193,3 +193,4 @@ legend { font-weight: 600; padding: 0 4px; }
   .stats strong { font-size: 1rem; }
   .stats span { font-size: .72rem; }
 }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
