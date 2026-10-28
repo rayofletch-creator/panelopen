@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Example Telehealth Co.",
+    "url": "https://example.com/?ref=panelopen",
+    "blurb": "Video therapy covered by many plans; first visit often within a week.",
+    "insurers": ["cigna", "uhc", "humana"],
+    "cats": ["therapist", "psychiatrist", "psychiatric-np"]
+  }
+]
