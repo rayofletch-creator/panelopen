@@ -440,6 +440,7 @@ def static_pages(ctx, city_path, city):
 <div class="tier tier-main"><p class="tag">Most popular</p><h2>Practice Pro</h2><p class="price">$39<span>/mo</span></p><ul><li>Everything in Free</li><li>Online booking or intake link</li><li>Weekly opening counts & waitlist</li><li>Patient call analytics</li><li>Directory-error alerts across insurers</li></ul>""" + pay_button(ctx, "pro", "Start 30-day trial", "btn") + """</div>
 <div class="tier"><h2>Group</h2><p class="price">$149<span>/mo</span></p><ul><li>Up to 15 clinicians</li><li>Group page & intake routing</li><li>Bulk availability updates</li><li>Labelled featured placement</li></ul>""" + pay_button(ctx, "group", "Subscribe", "btn btn-ghost") + """</div>
 </div>
+""" + (f'<p class="muted small">Already subscribed? <a href="{e(ctx["payments"]["portal"])}" rel="noopener">Manage your plan or cancel</a>.</p>' if ctx["payments"].get("portal") else "") + """
 <section class="panel" id="claim"><h2>Claim your profile</h2><form class="stack" data-form><input type="hidden" name="kind" value="claim"><input type="hidden" name="plan" data-plan value="free"><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div><label>NPI number<input name="npi" inputmode="numeric" maxlength="10" required></label><label>Work email<input type="email" name="email" required></label><button class="btn" type="submit">Send verification</button><p class="muted small" data-form-msg>We verify ownership by contacting the phone or email on your NPI record.</p></form></section>""",
          [("Home", "/"), ("For providers", "/for-providers/")])
     page(ctx, "/for-providers/welcome/", f"Welcome | {BRAND}",
@@ -448,8 +449,8 @@ def static_pages(ctx, city_path, city):
 <p class="lede">Your subscription is active. Stripe has emailed your receipt.</p>
 <h2>What happens next</h2><ol><li>We verify you own the listing by contacting the phone or email on your NPI record — usually within one business day.</li>
 <li>Once verified, we'll set up your booking link and availability on your profile.</li>
-<li>You can update, pause or cancel any time from the link in your Stripe receipt.</li></ol>
-<p><a class="btn" href="/">Back to Now Accepting</a></p></article>""",
+<li>You can update your card or cancel any time from your billing portal.</li></ol>
+<p><a class="btn" href="/">Back to Now Accepting</a> """ + (f'<a class="btn btn-ghost" href="{e(ctx["payments"]["portal"])}" rel="noopener">Manage subscription</a>' if ctx["payments"].get("portal") else "") + """</p></article>""",
          [("Home", "/"), ("For providers", "/for-providers/"), ("Welcome", "/for-providers/welcome/")], noindex=True)
     page(ctx, "/report/", f"Report a Call Outcome | {BRAND}",
          "Tell us whether a provider was really accepting new patients. Your report improves listings for everyone.",
