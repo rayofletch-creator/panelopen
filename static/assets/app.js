@@ -79,6 +79,12 @@
   document.querySelectorAll("[data-plan]").forEach(function (el) {
     if (/^(free|pro|group)$/.test(params.get("plan") || "")) el.value = params.get("plan");
   });
+  // Stripe Payment Links: carry the provider's NPI through checkout.
+  if (/^\d{10}$/.test(params.get("npi") || "")) {
+    document.querySelectorAll("a[data-pay]").forEach(function (a) {
+      a.href += (a.href.indexOf("?") > -1 ? "&" : "?") + "client_reference_id=" + params.get("npi");
+    });
+  }
   document.querySelectorAll("[data-page]").forEach(function (el) { el.value = document.referrer.slice(0, 200); });
   document.querySelectorAll("[data-form]").forEach(function (f) {
     f.addEventListener("submit", function (ev) {

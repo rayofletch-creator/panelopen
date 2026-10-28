@@ -407,6 +407,14 @@ def provider_page(ctx, p, city_path, city):
     page(ctx, f"/provider/{p['slug']}/", title, desc, body, crumbs, [ld], noindex=p["level"] == "none")
 
 
+def pay_button(ctx, plan, label, cls):
+    """Stripe Payment Link when configured (data/payments.json), else the free claim form."""
+    link = ctx["payments"].get(plan)
+    if link:
+        return f'<a class="{cls}" href="{e(link)}" data-pay rel="noopener">{label}</a>'
+    return f'<a class="{cls}" href="?plan={plan}#claim">{label}</a>'
+
+
 def static_pages(ctx, city_path, city):
     page(ctx, "/how-we-verify/", f"How We Verify Provider Listings | {BRAND}",
          "Where our in-network and accepting-new-patients data comes from, and how each listing's confidence score is calculated.",
@@ -429,11 +437,20 @@ def static_pages(ctx, city_path, city):
 <p class="lede">Insurer directories say you're accepting new patients when you're not — or hide you when you are. Claim your profile and control what patients see.</p></article>
 <div class="tiers">
 <div class="tier"><h2>Free</h2><p class="price">$0</p><ul><li>Claim and correct your listing</li><li>Toggle "accepting new patients"</li><li>Shown as provider-confirmed</li></ul><a class="btn btn-ghost" href="?plan=free#claim">Claim free</a></div>
-<div class="tier tier-main"><p class="tag">Most popular</p><h2>Practice Pro</h2><p class="price">$39<span>/mo</span></p><ul><li>Everything in Free</li><li>Online booking or intake link</li><li>Weekly opening counts & waitlist</li><li>Patient call analytics</li><li>Directory-error alerts across insurers</li></ul><a class="btn" href="?plan=pro#claim">Start 30-day trial</a></div>
-<div class="tier"><h2>Group</h2><p class="price">$149<span>/mo</span></p><ul><li>Up to 15 clinicians</li><li>Group page & intake routing</li><li>Bulk availability updates</li><li>Labelled featured placement</li></ul><a class="btn btn-ghost" href="?plan=group#claim">Talk to us</a></div>
+<div class="tier tier-main"><p class="tag">Most popular</p><h2>Practice Pro</h2><p class="price">$39<span>/mo</span></p><ul><li>Everything in Free</li><li>Online booking or intake link</li><li>Weekly opening counts & waitlist</li><li>Patient call analytics</li><li>Directory-error alerts across insurers</li></ul>""" + pay_button(ctx, "pro", "Start 30-day trial", "btn") + """</div>
+<div class="tier"><h2>Group</h2><p class="price">$149<span>/mo</span></p><ul><li>Up to 15 clinicians</li><li>Group page & intake routing</li><li>Bulk availability updates</li><li>Labelled featured placement</li></ul>""" + pay_button(ctx, "group", "Subscribe", "btn btn-ghost") + """</div>
 </div>
 <section class="panel" id="claim"><h2>Claim your profile</h2><form class="stack" data-form><input type="hidden" name="kind" value="claim"><input type="hidden" name="plan" data-plan value="free"><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div><label>NPI number<input name="npi" inputmode="numeric" maxlength="10" required></label><label>Work email<input type="email" name="email" required></label><button class="btn" type="submit">Send verification</button><p class="muted small" data-form-msg>We verify ownership by contacting the phone or email on your NPI record.</p></form></section>""",
          [("Home", "/"), ("For providers", "/for-providers/")])
+    page(ctx, "/for-providers/welcome/", f"Welcome | {BRAND}",
+         "Your subscription is active.",
+         """<article class="prose"><h1>You're in — thank you</h1>
+<p class="lede">Your subscription is active. Stripe has emailed your receipt.</p>
+<h2>What happens next</h2><ol><li>We verify you own the listing by contacting the phone or email on your NPI record — usually within one business day.</li>
+<li>Once verified, we'll set up your booking link and availability on your profile.</li>
+<li>You can update, pause or cancel any time from the link in your Stripe receipt.</li></ol>
+<p><a class="btn" href="/">Back to Now Accepting</a></p></article>""",
+         [("Home", "/"), ("For providers", "/for-providers/"), ("Welcome", "/for-providers/welcome/")], noindex=True)
     page(ctx, "/report/", f"Report a Call Outcome | {BRAND}",
          "Tell us whether a provider was really accepting new patients. Your report improves listings for everyone.",
          """<article class="prose"><h1>What happened when you called?</h1><p class="lede">Takes 20 seconds. No account, and we never ask about your health.</p></article>
@@ -460,13 +477,13 @@ def static_pages(ctx, city_path, city):
          [("Home", "/"), ("Privacy", "/privacy/")])
 
 
-def build(raw, site, partners, forms_url, reports):
+def build(raw, site, partners, forms_url, reports, payments):
     city, st = raw["city"], raw["state"]
     city_path = f"/{st.lower()}/{slugify(city)}/"
     providers = merge(raw, reports)
     active = sorted({k for p in providers for k in p["plans"]})
     ctx = {"site": site.rstrip("/"), "base": urlparse(site).path.rstrip("/"), "payers": raw["payers"], "active_payers": active, "generated": raw["generated"],
-           "sitemap": [], "partners": partners, "forms": forms_url}
+           "sitemap": [], "partners": partners, "forms": forms_url, "payments": payments}
     accepting = [p for p in providers if p["level"] != "none"]
     cityname = f"{city}, {st}"
 
@@ -562,6 +579,7 @@ def build(raw, site, partners, forms_url, reports):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--site-url", default="https://nowacceptingpatients.com")
+    ap.add_argument("--payments", help="Stripe links JSON (default data/payments.json; data/payments.test.json for test mode)")
     ap.add_argument("--forms-url", default=os.environ.get("FORMS_URL", ""), help="Apps Script web app URL (forms/Code.gs)")
     args = ap.parse_args()
     if os.path.exists(DIST):
@@ -571,10 +589,12 @@ def main():
     partners = json.load(open(partners_path)) if os.path.exists(partners_path) else []
     reports_path = os.path.join(ROOT, "data", "reports.json")
     reports = json.load(open(reports_path)) if os.path.exists(reports_path) else {}
+    payments_path = args.payments or os.path.join(ROOT, "data", "payments.json")
+    payments = json.load(open(payments_path)) if os.path.exists(payments_path) else {}
     for path in sorted(glob.glob(os.path.join(ROOT, "data", "raw_*.json.gz"))):
         with gzip.open(path, "rt") as f:
             raw = json.load(f)
-        providers, ctx = build(raw, args.site_url, partners, args.forms_url, reports)
+        providers, ctx = build(raw, args.site_url, partners, args.forms_url, reports, payments)
         lv = defaultdict(int)
         for p in providers:
             lv[p["level"]] += 1
