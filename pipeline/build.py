@@ -1,7 +1,7 @@
 """Merge raw directory data per provider, score how trustworthy each
 "accepting new patients" claim is, and render a static, SEO-first site.
 
-Usage: python3 -I pipeline/build.py --site-url https://panelopen.com
+Usage: python3 -I pipeline/build.py --site-url https://nowacceptingpatients.com
 Reads data/raw_*.json.gz, writes dist/.
 """
 import argparse
@@ -18,7 +18,7 @@ from datetime import date, datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST = os.path.join(ROOT, "dist")
-BRAND = "PanelOpen"
+BRAND = "Now Accepting"
 PAGE_SIZE = 25
 MIN_INDEXABLE = 3  # combos with fewer providers are built but noindexed
 
@@ -548,7 +548,7 @@ def build(raw, site, partners):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--site-url", default="https://panelopen.com")
+    ap.add_argument("--site-url", default="https://nowacceptingpatients.com")
     args = ap.parse_args()
     if os.path.exists(DIST):
         shutil.rmtree(DIST)

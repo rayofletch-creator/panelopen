@@ -52,8 +52,10 @@ h3 { font-size: 1.05rem; }
 .top { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
 .top-in { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 60px; }
 .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink); text-decoration: none; font-size: 1.1rem; }
-.logo-mark { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--brand); position: relative; }
-.logo-mark::after { content: ""; position: absolute; inset: 4px; background: var(--brand); border-radius: 50%; clip-path: inset(0 0 0 50%); }
+.logo-mark { width: 18px; height: 18px; border-radius: 50%; background: var(--brand-soft); display: grid; place-items: center; }
+.logo-mark::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: live 2.4s ease-out infinite; }
+@keyframes live { 0% { box-shadow: 0 0 0 0 rgba(21, 122, 74, .45); } 70%, 100% { box-shadow: 0 0 0 7px rgba(21, 122, 74, 0); } }
+@media (prefers-reduced-motion: reduce) { .logo-mark::after { animation: none; } }
 .top-nav { display: flex; gap: 18px; align-items: center; font-size: .95rem; }
 .top-nav a { color: var(--ink); text-decoration: none; }
 .top-nav a:hover { color: var(--brand); }

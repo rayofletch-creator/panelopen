@@ -1,4 +1,4 @@
-# PanelOpen
+# Now Accepting (nowacceptingpatients.com)
 
 Find in-network therapists and doctors who are actually accepting new patients.
 Static, SEO-first site generated from public data. Pilot city: Denver, CO.
@@ -31,8 +31,17 @@ Monday it also re-pulls insurer data, commits the refreshed `data/raw_*.json.gz`
 and redeploys. To trigger a refresh by hand, use Actions → "Build and deploy" →
 Run workflow.
 
+Custom domain (nowacceptingpatients.com), once purchased:
+1. At the registrar, add DNS records: four `A` records for `@` pointing to
+   185.199.108.153, 185.199.109.153, 185.199.110.153 and 185.199.111.153, plus a
+   `CNAME` for `www` pointing to `rayofletch-creator.github.io`.
+2. Repo Settings → Pages → Custom domain: `nowacceptingpatients.com`, then tick
+   "Enforce HTTPS" once the certificate is issued.
+3. Set the `SITE_URL` variable below to `https://nowacceptingpatients.com` and
+   re-run the workflow.
+
 Repo variables (Settings → Secrets and variables → Actions → Variables):
-- `SITE_URL`: set this when you add a custom domain (e.g. `https://panelopen.com`).
+- `SITE_URL`: set this when you add a custom domain (e.g. `https://nowacceptingpatients.com`).
   It's used for canonical URLs and the sitemap.
 - `MAX_LOCATIONS`: insurer locations pulled per insurer (default 1500). Raise it
   for fuller coverage; the run gets slower.

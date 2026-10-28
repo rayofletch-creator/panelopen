@@ -18,7 +18,7 @@
     var cards = Array.prototype.slice.call(list.querySelectorAll(".card"));
     var count = form.querySelector("[data-count]");
     var none = document.querySelector("[data-noresults]");
-    var KEY = "po-filters";
+    var KEY = "na-filters";
     try {
       var saved = JSON.parse(localStorage.getItem(KEY) || "{}");
       Object.keys(saved).forEach(function (k) {

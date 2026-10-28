@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, ".cache")
-HEADERS = {"Accept": "application/fhir+json", "User-Agent": "OpenNetwork/0.1 (provider directory research)"}
+HEADERS = {"Accept": "application/fhir+json", "User-Agent": "NowAccepting/0.1 (+https://nowacceptingpatients.com)"}
 
 PAYERS = {
     "cigna": {"name": "Cigna", "base": "https://fhir.cigna.com/ProviderDirectory/v1"},
