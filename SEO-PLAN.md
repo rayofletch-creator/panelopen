@@ -26,6 +26,16 @@ so links from credible sites matter more than anything else on this list.
 - IndexNow (Bing, Yandex, Seznam, Naver; Bing powers DuckDuckGo and ChatGPT search):
   all URLs submitted, and every weekly refresh re-submits automatically
 - Linkable asset: /reports/colorado-insurance-directory-accuracy/
+- Keyword-first titles (≤ ~65 chars) and descriptions (≤ 155 chars); no duplicates
+- Paginated pages 2+ noindexed (still followed) to concentrate ranking signals
+- Every profile links to up to six similar strong providers and its listing pages
+- Four guides targeting informational searches, with Article + FAQ schema:
+  /guides/find-a-therapist-that-takes-your-insurance/, /guides/ghost-networks/,
+  /guides/no-in-network-therapist-available/, /guides/questions-to-ask-when-calling-a-provider/
+- Sitemap index split into providers / listings / pages (separate Search Console reports)
+- Social card (og:image), 404 page, IndexNow ping on every push
+- Indexing requested in Search Console (Oct 29): home, report, find-a-therapist guide
+- Audit (Oct 29): 5,407 pages, 0 broken internal links, 0 invalid JSON-LD, 0 duplicate titles
 
 ## Do this week (needs you)
 
@@ -33,7 +43,8 @@ so links from credible sites matter more than anything else on this list.
    Google Search Console". One click; gives Bing data and its own index report.
 2. **Request indexing in Search Console** for up to ~10 URLs a day (Google's
    quota). Priority order:
-   - /co/denver/  /co/colorado-springs/  /co/aurora/  /co/boulder/  /co/fort-collins/
+   - /co/denver/  /co/colorado-springs/  /co/aurora/  /co/boulder/  /co/fort-collins/  /co/lakewood/
+   - /guides/ghost-networks/  /guides/no-in-network-therapist-available/
    - /co/denver/therapist/cigna/  /co/denver/therapist/unitedhealthcare/
    - /co/denver/psychiatrist/  /co/colorado-springs/therapist/
 3. **Google Business Profile**: skip. A directory without a public office
