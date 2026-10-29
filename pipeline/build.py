@@ -32,7 +32,7 @@ CATS = {
 }
 PAYER_SLUG = {"cigna": "cigna", "uhc": "unitedhealthcare", "humana": "humana", "kaiser": "kaiser-permanente"}
 
-STATE_NAMES = {"CO": "Colorado"}
+STATE_NAMES = {"CO": "Colorado", "TX": "Texas"}
 
 
 def e(s):
@@ -239,7 +239,7 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
       <div><p class="foot-brand">{BRAND}</p><p class="muted">Find in-network providers who are actually taking new patients. Data from insurers' public directories and the federal NPI registry, cross-checked and scored.</p></div>
       <div><p class="foot-h">Cities</p>{''.join(f'<a href="{path}">{e(name)}</a>' for name, path in ctx["cities"])}</div>
       <div><p class="foot-h">Insurance</p>{''.join(f'<a href="/insurance/{s}/">{e(ctx["payers"][k])}</a>' for k, s in PAYER_SLUG.items() if k in ctx["active_payers"])}</div>
-      <div><p class="foot-h">{BRAND}</p><a href="/guides/">Guides</a><a href="/how-we-verify/">How we verify</a><a href="/reports/colorado-insurance-directory-accuracy/">Directory accuracy report</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
+      <div><p class="foot-h">{BRAND}</p><a href="/guides/">Guides</a><a href="/how-we-verify/">How we verify</a><a href="/reports/">Directory accuracy reports</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
     </div>
     <p class="muted small">Listings are informational and not a guarantee of coverage or availability. Always confirm network status with your insurer and the provider before booking. Data last refreshed {fmt_date(ctx["generated"])}.</p>
   </div>
@@ -585,13 +585,13 @@ def build_city(ctx, raw, city, st, city_path, providers):
         n = sum(1 for p in providers if k in p["accepting_payers"])
         if n:
             ins_links.append((f"{raw['payers'][k]} in {city}", f"/insurance/{PAYER_SLUG[k]}/", f"{n} accepting"))
-    others = [(name, path, "") for name, path in ctx["cities"] if path != city_path]
+    others = [(name, path, "") for name, path in ctx["cities"] if path != city_path and path.startswith(f"/{st.lower()}/")]
     hi = sum(1 for p in accepting if p["level"] == "high")
     body = f"""<header class="hero-sm"><h1>In-network care accepting new patients in {e(city)}</h1>
 <p class="lede">{len(accepting)} providers in {e(cityname)} are listed by their insurer as accepting new patients. {hi} pass enough cross-checks to earn high confidence.</p></header>
 {link_grid("Choose the type of care", cat_links)}
 {link_grid("Or start with your insurance", ins_links)}
-{link_grid("Nearby cities", others)}"""
+{link_grid(f"Other {STATE_NAMES.get(st, st)} cities", others)}"""
     page(ctx, city_path, f"{city} Doctors & Therapists Accepting New Patients",
          f"Find in-network therapists, psychiatrists and doctors in {cityname} who are actually accepting new patients. Updated {fmt_date(raw['generated'])}.",
          body, [("Home", "/"), (city, city_path)])
@@ -735,7 +735,18 @@ def build(raws, site, partners, forms_url, reports, payments):
         peers = [q for q in by_group[(path, p["cats"][0], payer)] if q["npi"] != p["npi"]][:6]
         provider_page(ctx, p, path, city, peers)
 
-    report_url = report_page(ctx, raws, providers)
+    reports_out = []
+    for st in sorted({r["state"] for r in raws}):
+        st_raws = [r for r in raws if r["state"] == st]
+        st_paths = {f"/{st.lower()}/{slugify(r['city'])}/" for r in st_raws}
+        st_providers = [p for p in providers if st_paths & set(p["src"])]
+        reports_out.append((STATE_NAMES.get(st, st), report_page(ctx, st_raws, st_providers), len(st_providers)))
+    page(ctx, "/reports/", "Insurer Directory Accuracy Reports by State",
+         "Original data on how often health insurer provider directories agree with the federal NPI registry, state by state.",
+         f'<header class="hero-sm"><h1>Directory accuracy reports</h1><p class="lede">We cross-check insurer provider directories against the federal NPI registry. Pick a state.</p></header>'
+         + link_grid("Reports", [(f"{name}: {n:,} providers checked", url, "") for name, url, n in reports_out]),
+         [("Home", "/"), ("Reports", "/reports/")])
+    report_url = "/reports/"
 
     # Home
     accepting = sum(n for *_, n, hi in city_stats)
@@ -743,7 +754,9 @@ def build(raws, site, partners, forms_url, reports, payments):
     ins_opts = "".join(f'<option value="{PAYER_SLUG[k]}">{e(first["payers"][k])}</option>' for k in active)
     cat_opts = "".join(f'<option value="{c}">{e(CATS[c][0])}</option>' for c in CATS)
     city_opts = "".join(f'<option value="{path}">{e(city)}, {e(st)}</option>' for city, st, path, *_ in city_stats)
-    city_grid = link_grid("Browse by city", [(f"{city}, {st}", path, f"{n:,} accepting · {hi:,} high confidence") for city, st, path, n, hi in city_stats])
+    city_grid = "".join(
+        link_grid(STATE_NAMES.get(state, state), [(f"{city}, {st}", path, f"{n:,} accepting · {hi:,} high confidence") for city, st, path, n, hi in city_stats if st == state])
+        for state in dict.fromkeys(st for _, st, *_ in city_stats))
     body = f"""<section class="hero">
 <h1>Find a provider who takes your insurance <em>and</em> is actually taking new patients.</h1>
 <p class="lede">In one U.S. Senate study, 80% of mental health listings in insurer directories were wrong or unreachable. We pull every insurer's public directory, cross-check it against the federal registry, and score each listing — so you call the right people first.</p>
@@ -759,7 +772,7 @@ def build(raws, site, partners, forms_url, reports, payments):
 <div><span class="num">2</span><h2>We cross-check every listing</h2><p>Each provider is matched against the federal NPI registry: license status, address and phone.</p></div>
 <div><span class="num">3</span><h2>You call the likely ones first</h2><p>Listings are ranked by confidence. Report what happened, and the next person gets better data.</p></div></section>
 <div id="cities">{city_grid}</div>
-<aside class="claim"><div><h2>How accurate are insurer directories?</h2><p>We checked every listing against the federal registry. See the numbers.</p></div><a class="btn" href="{report_url}">Read the report</a></aside>"""
+<aside class="claim"><div><h2>How accurate are insurer directories?</h2><p>We checked every listing against the federal registry. See the numbers for each state.</p></div><a class="btn" href="{report_url}">Read the reports</a></aside>"""
     page(ctx, "/", "Find In-Network Therapists & Doctors Accepting New Patients",
          "Find therapists, psychiatrists and doctors who take your insurance and are actually accepting new patients. Every listing cross-checked and scored for accuracy.",
          body, jsonld=[{"@context": "https://schema.org", "@type": "WebSite", "name": BRAND, "url": ctx["site"] + "/"},

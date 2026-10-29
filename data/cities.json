@@ -1,8 +1,42 @@
 [
-  {"city": "Denver", "state": "CO"},
-  {"city": "Colorado Springs", "state": "CO"},
-  {"city": "Aurora", "state": "CO"},
-  {"city": "Boulder", "state": "CO"},
-  {"city": "Fort Collins", "state": "CO"},
-  {"city": "Lakewood", "state": "CO"}
+  {
+    "city": "Denver",
+    "state": "CO"
+  },
+  {
+    "city": "Colorado Springs",
+    "state": "CO"
+  },
+  {
+    "city": "Aurora",
+    "state": "CO"
+  },
+  {
+    "city": "Boulder",
+    "state": "CO"
+  },
+  {
+    "city": "Fort Collins",
+    "state": "CO"
+  },
+  {
+    "city": "Lakewood",
+    "state": "CO"
+  },
+  {
+    "city": "Houston",
+    "state": "TX"
+  },
+  {
+    "city": "Dallas",
+    "state": "TX"
+  },
+  {
+    "city": "San Antonio",
+    "state": "TX"
+  },
+  {
+    "city": "Austin",
+    "state": "TX"
+  }
 ]
