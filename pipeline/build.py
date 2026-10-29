@@ -293,13 +293,22 @@ def card(ctx, p):
 </li>"""
 
 
+def example_zip(providers):
+    zips = defaultdict(int)
+    for p in providers:
+        for l in p["locations"]:
+            if l["zip"] and not l["virtual"]:
+                zips[l["zip"]] += 1
+    return max(zips, key=zips.get) if zips else "80206"
+
+
 def filters(ctx, providers, fixed_cat=None, fixed_ins=None):
     ins_opts = "".join(f'<option value="{PAYER_SLUG[k]}">{e(ctx["payers"][k])}</option>' for k in PAYER_SLUG if k in ctx["active_payers"])
     cat_opts = "".join(f'<option value="{c}">{e(CATS[c][0])}</option>' for c in CATS)
     return f"""<form class="filters" data-filters aria-label="Filter results">
   {'' if fixed_ins else f'<label>Insurance<select name="ins"><option value="">Any insurance</option>{ins_opts}</select></label>'}
   {'' if fixed_cat else f'<label>Type of care<select name="cat"><option value="">Any</option>{cat_opts}</select></label>'}
-  <label>ZIP<input name="zip" inputmode="numeric" maxlength="5" placeholder="e.g. 80206"></label>
+  <label>ZIP<input name="zip" inputmode="numeric" maxlength="5" placeholder="e.g. {example_zip(providers)}"></label>
   <label>Gender<select name="g"><option value="">Any</option><option value="f">Female</option><option value="m">Male</option></select></label>
   <label class="check"><input type="checkbox" name="tele"> Telehealth</label>
   <label class="check"><input type="checkbox" name="hi"> High confidence only</label>
