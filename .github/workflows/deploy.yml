@@ -25,7 +25,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,7 +36,7 @@ jobs:
 
       - name: Refresh provider data
         if: github.event.schedule == '17 9 * * 1' || inputs.refresh
-        run: python3 -I pipeline/fetch.py --city Denver --state CO --payers cigna,uhc --max-locations ${{ vars.MAX_LOCATIONS || 1500 }}
+        run: sh pipeline/fetch_all.sh ${{ vars.MAX_LOCATIONS || 1500 }}
 
       - name: Commit refreshed data
         if: github.event.schedule == '17 9 * * 1' || inputs.refresh

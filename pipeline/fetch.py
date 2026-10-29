@@ -231,7 +231,7 @@ def main():
         "payers": {k: PAYERS[k]["name"] for k in PAYERS},
         "listings": listings, "registry": registry,
     }
-    path = os.path.join(ROOT, "data", f"raw_{args.city.lower()}.json.gz")
+    path = os.path.join(ROOT, "data", f"raw_{args.city.lower().replace(' ', '-')}.json.gz")
     with gzip.open(path, "wt") as f:
         json.dump(out, f)
     print(f"wrote {path}: {len(listings)} listings, {len(npis)} providers", file=sys.stderr)

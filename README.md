@@ -1,7 +1,7 @@
 # Now Accepting (nowacceptingpatients.com)
 
 Find in-network therapists and doctors who are actually accepting new patients.
-Static, SEO-first site generated from public data. Pilot city: Denver, CO.
+Static, SEO-first site generated from public data. Cities: see `data/cities.json` (Colorado to start).
 
 ## How it works
 
@@ -16,8 +16,11 @@ Static, SEO-first site generated from public data. Pilot city: Denver, CO.
    flag, record freshness, active NPI, ZIP match, phone match, multi-insurer,
    no contradictions) and renders static HTML to `dist/`.
 
+Cities live in `data/cities.json`; add one there and the next weekly run picks it up.
+
 ```bash
-python3 -I pipeline/fetch.py --city Denver --state CO
+sh pipeline/fetch_all.sh            # every city in data/cities.json
+python3 -I pipeline/fetch.py --city Denver --state CO   # or a single city
 python3 -I pipeline/build.py --site-url https://your-domain.com
 python3 -m http.server -d dist 8080
 ```

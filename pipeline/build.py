@@ -2,10 +2,9 @@
 "accepting new patients" claim is, and render a static, SEO-first site.
 
 Usage: python3 -I pipeline/build.py --site-url https://nowacceptingpatients.com
-Reads data/raw_*.json.gz, writes dist/.
+Reads data/cities.json and data/raw_<city>.json.gz, writes dist/.
 """
 import argparse
-import glob
 import html
 import json
 import os
@@ -99,6 +98,7 @@ def merge(raw, reports):
         phones = sorted({digits(l["phone"]) for l in ls if l["phone"]} - {""})
         cats = sorted({c for l in ls for c in l["categories"]})
         specs = sorted({s for l in ls for s in l["specialties"]})
+        src = sorted({l["src"] for l in ls})
 
         # ---- verification checks: each is (passed, label) ----
         accepting_payers = [k for k, p in plans.items() if p["accepting"] == "yes"]
@@ -166,6 +166,7 @@ def merge(raw, reports):
             "level": level,
             "freshest": freshest,
             "reports": rep,
+            "src": src,
         })
     level_rank = {"high": 0, "medium": 1, "low": 2, "none": 3}
     providers.sort(key=lambda p: (level_rank[p["level"]], -p["score"], p["name"]))
@@ -211,7 +212,7 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
   <div class="wrap top-in">
     <a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span>{BRAND}</a>
     <nav class="top-nav" aria-label="Main">
-      <a href="/co/denver/">Denver</a>
+      <a href="/#cities">Cities</a>
       <a href="/how-we-verify/">How we verify</a>
       <a href="/for-providers/" class="top-cta">For providers</a>
     </nav>
@@ -226,7 +227,7 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
     <div class="crisis"><strong>In crisis?</strong> Call or text <a href="tel:988">988</a> (Suicide &amp; Crisis Lifeline), or call 911 for an emergency.</div>
     <div class="foot-cols">
       <div><p class="foot-brand">{BRAND}</p><p class="muted">Find in-network providers who are actually taking new patients. Data from insurers' public directories and the federal NPI registry, cross-checked and scored.</p></div>
-      <div><p class="foot-h">Find care</p>{''.join(f'<a href="/co/denver/{c}/">{CATS[c][0]} in Denver</a>' for c in CATS)}</div>
+      <div><p class="foot-h">Cities</p>{''.join(f'<a href="{path}">{e(name)}</a>' for name, path in ctx["cities"])}</div>
       <div><p class="foot-h">Insurance</p>{''.join(f'<a href="/insurance/{s}/">{e(ctx["payers"][k])}</a>' for k, s in PAYER_SLUG.items() if k in ctx["active_payers"])}</div>
       <div><p class="foot-h">{BRAND}</p><a href="/how-we-verify/">How we verify</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
     </div>
@@ -478,17 +479,11 @@ def static_pages(ctx, city_path, city):
          [("Home", "/"), ("Privacy", "/privacy/")])
 
 
-def build(raw, site, partners, forms_url, reports, payments):
-    city, st = raw["city"], raw["state"]
-    city_path = f"/{st.lower()}/{slugify(city)}/"
-    providers = merge(raw, reports)
-    active = sorted({k for p in providers for k in p["plans"]})
-    ctx = {"site": site.rstrip("/"), "base": urlparse(site).path.rstrip("/"), "payers": raw["payers"], "active_payers": active, "generated": raw["generated"],
-           "sitemap": [], "partners": partners, "forms": forms_url, "payments": payments}
+def build_city(ctx, raw, city, st, city_path, providers):
+    """City hub, care-type and care-type x insurer pages for one city."""
+    active = ctx["active_payers"]
     accepting = [p for p in providers if p["level"] != "none"]
     cityname = f"{city}, {st}"
-
-    # Category × insurer combos (the long-tail money pages)
     cat_links, ins_links = [], []
     for c, (plural, singular, blurb) in CATS.items():
         ps = [p for p in providers if c in p["cats"]]
@@ -517,64 +512,97 @@ def build(raw, site, partners, forms_url, reports, payments):
                                ("What should I say when I call?", "Give your insurer and plan name, ask whether they're in-network for that specific plan, whether they're accepting new patients, and how long the wait is for a first appointment. Each profile has a copy-paste script.")])
         if n:
             cat_links.append((plural, f"{city_path}{c}/", f"{n} accepting"))
-
     for k in active:
-        s = PAYER_SLUG[k]
-        pk = [p for p in providers if k in p["accepting_payers"]]
-        links = [(f"{CATS[c][0]} in {city}", f"{city_path}{c}/{s}/", f"{sum(1 for p in pk if c in p['cats'])} accepting") for c in CATS if any(c in p["cats"] for p in pk)]
-        listing_pages(ctx, f"/insurance/{s}/", [("Home", "/"), (raw["payers"][k], f"/insurance/{s}/")],
-                      f"In-network providers that take {raw['payers'][k]}",
-                      f"Therapists, psychiatrists and doctors listed in <strong>{e(raw['payers'][k])}</strong>'s directory as accepting new patients, scored for accuracy.",
-                      f"Find Doctors & Therapists That Take {raw['payers'][k]} — Accepting New Patients",
-                      f"{len(pk)} providers in-network with {raw['payers'][k]} and accepting new patients in {cityname}, with accuracy scores.",
-                      pk, fixed_ins=s, extra_links=link_grid(f"{raw['payers'][k]} by type of care", links))
-        ins_links.append((raw["payers"][k], f"/insurance/{s}/", f"{len(pk)} accepting"))
-
-    # City hub
+        n = sum(1 for p in providers if k in p["accepting_payers"])
+        if n:
+            ins_links.append((f"{raw['payers'][k]} in {city}", f"/insurance/{PAYER_SLUG[k]}/", f"{n} accepting"))
+    others = [(name, path, "") for name, path in ctx["cities"] if path != city_path]
     hi = sum(1 for p in accepting if p["level"] == "high")
     body = f"""<header class="hero-sm"><h1>In-network care accepting new patients in {e(city)}</h1>
 <p class="lede">{len(accepting)} providers in {e(cityname)} are listed by their insurer as accepting new patients. {hi} pass enough cross-checks to earn high confidence.</p></header>
 {link_grid("Choose the type of care", cat_links)}
-{link_grid("Or start with your insurance", ins_links)}"""
+{link_grid("Or start with your insurance", ins_links)}
+{link_grid("Nearby cities", others)}"""
     page(ctx, city_path, f"Doctors & Therapists Accepting New Patients in {city}, {st} | {BRAND}",
          f"Find in-network therapists, psychiatrists and doctors in {cityname} who are actually accepting new patients. Updated {fmt_date(raw['generated'])}.",
          body, [("Home", "/"), (city, city_path)])
+    return len(accepting), hi
 
+
+def build(raws, site, partners, forms_url, reports, payments):
+    # One combined pass so a provider listed in two cities gets one profile page.
+    first = raws[0]
+    combined = {"generated": max(r["generated"] for r in raws), "payers": first["payers"], "listings": [], "registry": {}}
+    cities = []
+    for r in raws:
+        path = f"/{r['state'].lower()}/{slugify(r['city'])}/"
+        cities.append((r["city"], r["state"], path, r))
+        combined["listings"] += [{**l, "src": path} for l in r["listings"]]
+        combined["registry"].update(r["registry"])
+    providers = merge(combined, reports)
+    active = sorted({k for p in providers for k in p["plans"]})
+    ctx = {"site": site.rstrip("/"), "base": urlparse(site).path.rstrip("/"), "payers": first["payers"], "active_payers": active,
+           "generated": combined["generated"], "sitemap": [], "partners": partners, "forms": forms_url, "payments": payments,
+           "cities": [(f"{c}, {st}", path) for c, st, path, _ in cities]}
+    city_stats = []
+    for city, st, path, r in cities:
+        n, hi = build_city(ctx, r, city, st, path, [p for p in providers if path in p["src"]])
+        city_stats.append((city, st, path, n, hi))
+
+    # Insurer hubs span every city
+    for k in active:
+        s = PAYER_SLUG[k]
+        pk = [p for p in providers if k in p["accepting_payers"]]
+        links = [(f"{CATS[c][0]} in {city}", f"{path}{c}/{s}/", f"{sum(1 for p in pk if c in p['cats'] and path in p['src'])} accepting")
+                 for city, st, path, _ in cities for c in CATS if any(c in p["cats"] and path in p["src"] for p in pk)]
+        listing_pages(ctx, f"/insurance/{s}/", [("Home", "/"), (first["payers"][k], f"/insurance/{s}/")],
+                      f"In-network providers that take {first['payers'][k]}",
+                      f"Therapists, psychiatrists and doctors listed in <strong>{e(first['payers'][k])}</strong>'s directory as accepting new patients, scored for accuracy.",
+                      f"Find Doctors & Therapists That Take {first['payers'][k]} — Accepting New Patients",
+                      f"{len(pk)} providers in-network with {first['payers'][k]} and accepting new patients across {len(cities)} cities, with accuracy scores.",
+                      pk, fixed_ins=s, extra_links=link_grid(f"{first['payers'][k]} by city and type of care", links))
+
+    city_by_path = {path: (city, path) for city, st, path, _ in cities}
     for p in providers:
-        provider_page(ctx, p, city_path, city)
+        city, path = city_by_path[p["src"][0]]
+        provider_page(ctx, p, path, city)
 
     # Home
-    ins_opts = "".join(f'<option value="{PAYER_SLUG[k]}">{e(raw["payers"][k])}</option>' for k in active)
+    accepting = sum(n for *_, n, hi in city_stats)
+    hi_total = sum(hi for *_, n, hi in city_stats)
+    ins_opts = "".join(f'<option value="{PAYER_SLUG[k]}">{e(first["payers"][k])}</option>' for k in active)
     cat_opts = "".join(f'<option value="{c}">{e(CATS[c][0])}</option>' for c in CATS)
+    city_opts = "".join(f'<option value="{path}">{e(city)}, {e(st)}</option>' for city, st, path, *_ in city_stats)
+    city_grid = link_grid("Browse by city", [(f"{city}, {st}", path, f"{n:,} accepting · {hi:,} high confidence") for city, st, path, n, hi in city_stats])
     body = f"""<section class="hero">
 <h1>Find a provider who takes your insurance <em>and</em> is actually taking new patients.</h1>
 <p class="lede">In one U.S. Senate study, 80% of mental health listings in insurer directories were wrong or unreachable. We pull every insurer's public directory, cross-check it against the federal registry, and score each listing — so you call the right people first.</p>
-<form class="search" action="{city_path}" data-search>
+<form class="search" action="{cities[0][2]}" data-search>
   <label><span>I need a</span><select name="cat">{cat_opts}</select></label>
   <label><span>My insurance</span><select name="ins"><option value="">Any insurance</option>{ins_opts}</select></label>
-  <label><span>Near</span><select name="city"><option value="{city_path}">{e(cityname)}</option></select></label>
+  <label><span>Near</span><select name="city">{city_opts}</select></label>
   <button class="btn btn-lg" type="submit">Find openings</button>
 </form>
-<p class="muted small">{len(accepting):,} listings accepting new patients · {hi:,} high confidence · refreshed {fmt_date(raw['generated'])}</p>
+<p class="muted small">{accepting:,} listings accepting new patients in {len(cities)} cities · {hi_total:,} high confidence · refreshed {fmt_date(ctx['generated'])}</p>
 </section>
 <section class="how"><div><span class="num">1</span><h2>We pull the official data</h2><p>Insurers must publish their directories as open data. We collect them all in one place.</p></div>
 <div><span class="num">2</span><h2>We cross-check every listing</h2><p>Each provider is matched against the federal NPI registry: license status, address and phone.</p></div>
 <div><span class="num">3</span><h2>You call the likely ones first</h2><p>Listings are ranked by confidence. Report what happened, and the next person gets better data.</p></div></section>
-{link_grid(f"Popular in {city}", [(f"{CATS[c][0]} that take {raw['payers'][k]}", f"{city_path}{c}/{PAYER_SLUG[k]}/", "") for c in ("therapist", "psychiatrist", "primary-care") for k in active][:12])}"""
+<div id="cities">{city_grid}</div>"""
     page(ctx, "/", f"{BRAND} — In-Network Therapists & Doctors Accepting New Patients",
          "Find therapists, psychiatrists and doctors who take your insurance and are actually accepting new patients. Every listing cross-checked and scored for accuracy.",
          body, jsonld=[{"@context": "https://schema.org", "@type": "WebSite", "name": BRAND, "url": ctx["site"] + "/"}])
-    static_pages(ctx, city_path, city)
+    static_pages(ctx, cities[0][2], cities[0][0])
 
     # SEO plumbing
     with open(os.path.join(DIST, "sitemap.xml"), "w") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
         for path in ctx["sitemap"]:
-            f.write(f"<url><loc>{ctx['site']}{path}</loc><lastmod>{raw['generated']}</lastmod></url>\n")
+            f.write(f"<url><loc>{ctx['site']}{path}</loc><lastmod>{ctx['generated']}</lastmod></url>\n")
         f.write("</urlset>\n")
     with open(os.path.join(DIST, "robots.txt"), "w") as f:
         f.write(f"User-agent: *\nAllow: /\nDisallow: {ctx['base']}/report/\nSitemap: {ctx['site']}/sitemap.xml\n")
-    return providers, ctx
+    return providers, ctx, city_stats
 
 
 def main():
@@ -592,14 +620,19 @@ def main():
     reports = json.load(open(reports_path)) if os.path.exists(reports_path) else {}
     payments_path = args.payments or os.path.join(ROOT, "data", "payments.json")
     payments = json.load(open(payments_path)) if os.path.exists(payments_path) else {}
-    for path in sorted(glob.glob(os.path.join(ROOT, "data", "raw_*.json.gz"))):
-        with gzip.open(path, "rt") as f:
-            raw = json.load(f)
-        providers, ctx = build(raw, args.site_url, partners, args.forms_url, reports, payments)
-        lv = defaultdict(int)
-        for p in providers:
-            lv[p["level"]] += 1
-        print(f"{raw['city']}: {len(providers)} providers {dict(lv)}; {len(ctx['sitemap'])} indexable pages")
+    raws = []
+    for c in json.load(open(os.path.join(ROOT, "data", "cities.json"))):
+        path = os.path.join(ROOT, "data", f"raw_{c['city'].lower().replace(' ', '-')}.json.gz")
+        if os.path.exists(path):  # cities not fetched yet are skipped
+            with gzip.open(path, "rt") as f:
+                raws.append(json.load(f))
+    providers, ctx, city_stats = build(raws, args.site_url, partners, args.forms_url, reports, payments)
+    lv = defaultdict(int)
+    for p in providers:
+        lv[p["level"]] += 1
+    for city, st, path, n, hi in city_stats:
+        print(f"{city}, {st}: {n} accepting, {hi} high confidence")
+    print(f"total: {len(providers)} providers {dict(lv)}; {len(ctx['sitemap'])} indexable pages")
 
 
 if __name__ == "__main__":
