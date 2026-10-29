@@ -194,3 +194,7 @@ legend { font-weight: 600; padding: 0 4px; }
   .stats span { font-size: .72rem; }
 }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.glance { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin: 24px 0; max-width: 760px; }
+.glance ul { margin: 0; padding-left: 18px; }
+.glance li { margin-bottom: 4px; }
+.report h2 { margin-top: 1.6em; }

@@ -229,7 +229,7 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
       <div><p class="foot-brand">{BRAND}</p><p class="muted">Find in-network providers who are actually taking new patients. Data from insurers' public directories and the federal NPI registry, cross-checked and scored.</p></div>
       <div><p class="foot-h">Cities</p>{''.join(f'<a href="{path}">{e(name)}</a>' for name, path in ctx["cities"])}</div>
       <div><p class="foot-h">Insurance</p>{''.join(f'<a href="/insurance/{s}/">{e(ctx["payers"][k])}</a>' for k, s in PAYER_SLUG.items() if k in ctx["active_payers"])}</div>
-      <div><p class="foot-h">{BRAND}</p><a href="/how-we-verify/">How we verify</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
+      <div><p class="foot-h">{BRAND}</p><a href="/how-we-verify/">How we verify</a><a href="/reports/colorado-insurance-directory-accuracy/">Directory accuracy report</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
     </div>
     <p class="muted small">Listings are informational and not a guarantee of coverage or availability. Always confirm network status with your insurer and the provider before booking. Data last refreshed {fmt_date(ctx["generated"])}.</p>
   </div>
@@ -315,6 +315,43 @@ def monetization_slot(ctx, ins_key=None, cat=None):
     return f'<aside class="partner"><p class="tag">Partner · we may earn a referral fee</p><h2>No luck locally? Telehealth options that take insurance</h2><ul>{items}</ul></aside>'
 
 
+def insights(ctx, acc, fixed_cat=None, fixed_ins=None):
+    """'At a glance' facts computed from this page's own listings, so every
+    listing page carries content no other page has."""
+    if len(acc) < MIN_INDEXABLE:
+        return ""
+    n = len(acc)
+    pct = lambda k: f"{round(100 * k / n)}%"
+    hi = sum(1 for p in acc if p["level"] == "high")
+    tele = sum(1 for p in acc if p["telehealth"])
+    fem = sum(1 for p in acc if p["gender"] == "Female")
+    male = sum(1 for p in acc if p["gender"] == "Male")
+    fresh = sum(1 for p in acc if p["checks"][1][0])
+    multi = sum(1 for p in acc if len(p["accepting_payers"]) > 1)
+    zips = defaultdict(int)
+    for p in acc:
+        for z in {l["zip"] for l in p["locations"] if not l["virtual"] and l["zip"]}:
+            zips[z] += 1
+    top = sorted(zips.items(), key=lambda x: -x[1])[:6]
+    facts = [
+        f"<li><strong>{hi} of {n}</strong> ({pct(hi)}) pass enough cross-checks for high confidence — call these first.</li>",
+        f"<li><strong>{pct(fresh)}</strong> had their insurer record refreshed in the last 90 days.</li>",
+    ]
+    if tele:
+        facts.append(f"<li><strong>{tele}</strong> list a telehealth or virtual-visit location.</li>")
+    if fem or male:
+        facts.append(f"<li><strong>{fem}</strong> are women and <strong>{male}</strong> are men, per the federal NPI registry.</li>")
+    if not fixed_ins:
+        split = ", ".join(f"{ctx['payers'][k]} {sum(1 for p in acc if k in p['accepting_payers'])}" for k in ctx["active_payers"])
+        facts.append(f"<li>Accepting by insurer: {e(split)}. <strong>{multi}</strong> are listed as accepting by more than one insurer.</li>")
+    if not fixed_cat:
+        split = ", ".join(f"{CATS[c][0].lower()} {sum(1 for p in acc if c in p['cats'])}" for c in CATS if any(c in p["cats"] for p in acc))
+        facts.append(f"<li>By type of care: {e(split)}.</li>")
+    if top:
+        facts.append("<li>Most listings by ZIP: " + ", ".join(f"{z} ({k})" for z, k in top) + ".</li>")
+    return f'<section class="glance"><h2>At a glance</h2><ul>{"".join(facts)}</ul><p class="muted small">Computed from insurer directories and the NPI registry on {fmt_date(ctx["generated"])}.</p></section>'
+
+
 def listing_pages(ctx, base_path, crumbs, h1, intro, title, desc, providers, faq=None, fixed_cat=None, fixed_ins=None, extra_links=""):
     acc = [p for p in providers if p["level"] != "none"]
     pages = max(1, (len(acc) + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -342,6 +379,7 @@ def listing_pages(ctx, base_path, crumbs, h1, intro, title, desc, providers, faq
 <ol class="cards" data-list start="{i * PAGE_SIZE + 1}">{items}</ol>
 <p class="noresults" data-noresults hidden>No matches on this page. Clear a filter or try the next page.</p>
 {pager}
+{insights(ctx, acc, fixed_cat, fixed_ins) if i == 0 else ''}
 {monetization_slot(ctx, next((k for k, s in PAYER_SLUG.items() if s == fixed_ins), None), fixed_cat) if i == 0 else ''}
 {extra_links if i == 0 else ''}
 {faq_html}"""
@@ -405,7 +443,7 @@ def provider_page(ctx, p, city_path, city):
     desc = f"{full} — {cats} in {city}. " + (f"Listed as accepting new patients with {accepting}. " if accepting else "") + f"Confidence: {LEVEL_LABEL[p['level']].lower()}."
     title = f"{full} — {cats.split(',')[0].title()} in {city}" + (f" | Takes {accepting}" if accepting and len(accepting) < 40 else "")
     crumbs = [("Home", "/"), (city, city_path), (CATS[p["cats"][0]][0], f"{city_path}{p['cats'][0]}/"), (p["name"], f"/provider/{p['slug']}/")]
-    page(ctx, f"/provider/{p['slug']}/", title, desc, body, crumbs, [ld], noindex=p["level"] == "none")
+    page(ctx, f"/provider/{p['slug']}/", title, desc, body, crumbs, [ld], noindex=p["level"] in ("none", "low"))
 
 
 def pay_button(ctx, plan, label, cls):
@@ -529,6 +567,60 @@ def build_city(ctx, raw, city, st, city_path, providers):
     return len(accepting), hi
 
 
+def report_page(ctx, raws, providers):
+    """Original, citable statistics on directory accuracy: the page most
+    likely to earn links from press, bloggers and forums."""
+    listings = [l for r in raws for l in r["listings"]]
+    states = sorted({r["state"] for r in raws})
+    region = ", ".join(STATE_NAMES.get(st, st) for st in states)
+    n = len(providers)
+    pct = lambda k, d: f"{round(100 * k / d)}%" if d else "—"
+    rows = ""
+    for k in ctx["active_payers"]:
+        ls = [l for l in listings if l["payer"] == k]
+        yes = sum(1 for l in ls if l["accepting"] == "yes")
+        no = sum(1 for l in ls if l["accepting"] == "no")
+        rows += f"<tr><th scope='row'>{e(ctx['payers'][k])}</th><td data-label='Listings checked'>{len(ls):,}</td><td data-label='Marked accepting'>{pct(yes, len(ls))}</td><td data-label='Marked not accepting'>{pct(no, len(ls))}</td></tr>"
+    reg = [p for p in providers if p["level"] != "none"]
+    zip_ok = sum(1 for p in reg if p["checks"][3][0])
+    phone_ok = sum(1 for p in reg if p["checks"][4][0])
+    fresh = sum(1 for p in reg if p["checks"][1][0])
+    multi = [p for p in providers if len(p["plans"]) > 1]
+    conflict = sum(1 for p in multi if any(pl["accepting"] == "yes" for pl in p["plans"].values()) and any(pl["accepting"] == "no" for pl in p["plans"].values()))
+    lv = defaultdict(int)
+    for p in providers:
+        lv[p["level"]] += 1
+    names = [r["city"] for r in raws]
+    cities = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    uhc_all = all(l["accepting"] == "yes" for l in listings if l["payer"] == "uhc") and any(l["payer"] == "uhc" for l in listings)
+    headline = f"We checked {n:,} {region} provider listings against the federal registry"
+    lede = (f"Insurers are legally required to publish who is in-network and accepting new patients. We pulled those public directories for {e(cities)} "
+            f"and cross-checked every provider against the federal NPI registry. Only <strong>{pct(lv['high'], n)}</strong> of providers passed enough checks to earn high confidence.")
+    body = f"""<article class="prose report"><p class="tag">Data report · {fmt_date(ctx['generated'])}</p><h1>{e(headline)}</h1>
+<p class="lede">{lede}</p>
+<h2>Key findings</h2><ul>
+<li><strong>{pct(lv['high'], n)}</strong> of {n:,} providers earned high confidence; <strong>{pct(lv['low'] + lv['none'], n)}</strong> were low confidence or not accepting.</li>
+<li>For providers listed as accepting, the office ZIP matched the federal registry <strong>{pct(zip_ok, len(reg))}</strong> of the time, and the phone number only <strong>{pct(phone_ok, len(reg))}</strong>. A mismatch isn't always an error — many providers practice at several offices — but it's a reason to call before you go.</li>
+<li><strong>{pct(fresh, len(reg))}</strong> had an insurer record refreshed in the last 90 days.</li>
+<li>Of {len(multi):,} providers listed by more than one insurer, <strong>{conflict}</strong> were marked accepting by one and not accepting by another.</li>
+{"<li><strong>UnitedHealthcare marked every one of its listings as accepting new patients</strong> — so its flag can't distinguish open panels from full ones.</li>" if uhc_all else ""}
+</ul>
+<h2>Accepting-new-patients flags by insurer</h2>
+<div class="table-wrap"><table><thead><tr><th>Insurer</th><th>Listings checked</th><th>Marked accepting</th><th>Marked not accepting</th></tr></thead><tbody>{rows}</tbody></table></div>
+<h2>Why it matters</h2><p>A 2023 U.S. Senate Finance Committee secret-shopper study found 80% of mental health listings in Medicare Advantage directories were inaccurate or unreachable. These "ghost networks" leave patients calling provider after provider. Our numbers measure consistency between public data sources rather than phone calls, so they show where to be cautious rather than a definitive error rate.</p>
+<h2>Methodology</h2><p>Source data: insurer provider directories published under the CMS Interoperability and Patient Access rule (Da Vinci PDex Plan-Net FHIR APIs), and the CMS NPPES NPI registry, retrieved {fmt_date(ctx['generated'])}. Up to 1,500 directory locations per insurer per city were sampled. Providers were matched by NPI. A listing earns one point per check passed; see <a href="/how-we-verify/">how we verify</a>. Deactivated NPIs were excluded.</p>
+<h2>Use this data</h2><p>Journalists and researchers may cite these figures with a link to this page. For the underlying numbers by city, insurer or specialty, use the contact details on our <a href="/about/">about page</a>.</p>
+<p><a class="btn" href="/">Search providers accepting new patients</a></p></article>"""
+    ld = {"@context": "https://schema.org", "@type": "Article", "headline": headline, "datePublished": ctx["generated"], "dateModified": ctx["generated"],
+          "author": {"@type": "Organization", "name": BRAND, "url": ctx["site"] + "/"}, "publisher": {"@type": "Organization", "name": BRAND},
+          "about": "Accuracy of health insurer provider directories"}
+    slug = f"/reports/{slugify(region)}-insurance-directory-accuracy/"
+    page(ctx, slug, f"{headline} | {BRAND}",
+         f"Original data: only {pct(lv['high'], n)} of {n:,} {region} providers in insurer directories passed our accuracy cross-checks. Findings by insurer, methodology and sources.",
+         body, [("Home", "/"), ("Reports", slug)], [ld])
+    return slug
+
+
 def build(raws, site, partners, forms_url, reports, payments):
     # One combined pass so a provider listed in two cities gets one profile page.
     first = raws[0]
@@ -567,6 +659,8 @@ def build(raws, site, partners, forms_url, reports, payments):
         city, path = city_by_path[p["src"][0]]
         provider_page(ctx, p, path, city)
 
+    report_url = report_page(ctx, raws, providers)
+
     # Home
     accepting = sum(n for *_, n, hi in city_stats)
     hi_total = sum(hi for *_, n, hi in city_stats)
@@ -588,10 +682,12 @@ def build(raws, site, partners, forms_url, reports, payments):
 <section class="how"><div><span class="num">1</span><h2>We pull the official data</h2><p>Insurers must publish their directories as open data. We collect them all in one place.</p></div>
 <div><span class="num">2</span><h2>We cross-check every listing</h2><p>Each provider is matched against the federal NPI registry: license status, address and phone.</p></div>
 <div><span class="num">3</span><h2>You call the likely ones first</h2><p>Listings are ranked by confidence. Report what happened, and the next person gets better data.</p></div></section>
-<div id="cities">{city_grid}</div>"""
+<div id="cities">{city_grid}</div>
+<aside class="claim"><div><h2>How accurate are insurer directories?</h2><p>We checked every listing against the federal registry. See the numbers.</p></div><a class="btn" href="{report_url}">Read the report</a></aside>"""
     page(ctx, "/", f"{BRAND} — In-Network Therapists & Doctors Accepting New Patients",
          "Find therapists, psychiatrists and doctors who take your insurance and are actually accepting new patients. Every listing cross-checked and scored for accuracy.",
-         body, jsonld=[{"@context": "https://schema.org", "@type": "WebSite", "name": BRAND, "url": ctx["site"] + "/"}])
+         body, jsonld=[{"@context": "https://schema.org", "@type": "WebSite", "name": BRAND, "url": ctx["site"] + "/"},
+                      {"@context": "https://schema.org", "@type": "Organization", "name": BRAND, "url": ctx["site"] + "/", "logo": ctx["site"] + "/favicon.svg"}])
     static_pages(ctx, cities[0][2], cities[0][0])
 
     # SEO plumbing

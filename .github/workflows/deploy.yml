@@ -70,3 +70,12 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  ping-search-engines:
+    # After a data refresh, tell IndexNow engines (Bing et al.) to recrawl.
+    needs: deploy
+    if: github.event.schedule == '17 9 * * 1' || inputs.refresh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -I pipeline/indexnow.py "${{ vars.SITE_URL || 'https://nowacceptingpatients.com' }}"
