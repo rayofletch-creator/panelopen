@@ -728,7 +728,7 @@ def build(raws, site, partners, forms_url, reports, payments):
                       f"In-network providers that take {first['payers'][k]}",
                       f"Therapists, psychiatrists and doctors listed in <strong>{e(first['payers'][k])}</strong>'s directory as accepting new patients, scored for accuracy.",
                       f"Doctors & Therapists Taking {first['payers'][k]} — New Patients",
-                      f"{len(pk)} providers in-network with {first['payers'][k]} and accepting new patients across {len(cities)} cities, with accuracy scores.",
+                      f"{len(pk)} providers in-network with {first['payers'][k]} and accepting new patients across {len({c for p in pk for c in p['src']})} {'city' if len({c for p in pk for c in p['src']}) == 1 else 'cities'}, with accuracy scores.",
                       pk, fixed_ins=s, extra_links=link_grid(f"{first['payers'][k]} by city and type of care", links))
 
     city_by_path = {path: (city, path) for city, st, path, _ in cities}

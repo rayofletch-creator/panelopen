@@ -24,7 +24,8 @@ HEADERS = {"Accept": "application/fhir+json", "User-Agent": "NowAccepting/0.1 (+
 PAYERS = {
     "cigna": {"name": "Cigna", "base": "https://fhir.cigna.com/ProviderDirectory/v1"},
     "uhc": {"name": "UnitedHealthcare", "base": "https://flex.optum.com/fhirpublic/R4"},
-    "humana": {"name": "Humana", "base": "https://fhir.humana.com/api"},
+    # Humana's CDN blocks bursts, so it gets few workers and a pause per request.
+    "humana": {"name": "Humana", "base": "https://fhir.humana.com/api", "threads": 2, "pause": 0.5},
     "kaiser": {"name": "Kaiser Permanente", "base": "https://kpx-service-bus.kp.org/service/hp/mhpo/healthplanproviderv1rc"},
 }
 
@@ -56,6 +57,13 @@ def category_for(code):
     return None
 
 
+class Blocked(Exception):
+    """The insurer refused us (403/429). Stop that insurer for this run instead of retrying."""
+
+
+PAUSE = 0.0  # seconds to wait after each live request (set per insurer)
+
+
 def get(url, retries=3):
     key = hashlib.sha1(url.encode()).hexdigest()
     path = os.path.join(CACHE, key + ".json")
@@ -67,10 +75,16 @@ def get(url, retries=3):
             req = urllib.request.Request(url, headers=HEADERS)
             with urllib.request.urlopen(req, timeout=60) as r:
                 data = json.load(r)
-            with open(path, "w") as f:
+            tmp = f"{path}.{os.getpid()}.tmp"  # atomic: parallel city fetches share the cache
+            with open(tmp, "w") as f:
                 json.dump(data, f)
+            os.replace(tmp, path)
+            if PAUSE:
+                time.sleep(PAUSE)
             return data
         except urllib.error.HTTPError as e:
+            if e.code in (403, 429):
+                raise Blocked(f"{e.code} from {url.split('?')[0]}")
             if e.code in (400, 404):
                 return {}
             time.sleep(2 * (attempt + 1))
@@ -115,6 +129,10 @@ def npi_of(resource):
 
 def fetch_payer(key, city, state, max_locations):
     base = PAYERS[key]["base"]
+    workers = PAYERS[key].get("threads", 16)
+    pause = PAYERS[key].get("pause", 0.0)
+    global PAUSE
+    PAUSE = pause  # one city per process and insurers run in turn, so a module setting is safe
     q = urllib.parse.urlencode({"address-city": city, "address-state": state, "_count": 100})
     locations = {l["id"]: l for l in paged(f"{base}/Location?{q}", limit_pages=max(1, max_locations // 100))}
     print(f"[{key}] {len(locations)} locations in {city}", file=sys.stderr)
@@ -125,7 +143,7 @@ def fetch_payer(key, city, state, max_locations):
             found = paged(f"{base}/PractitionerRole?location={urllib.parse.quote(base + '/Location/' + loc_id, safe='')}&_count=100", limit_pages=20)
         return found
 
-    with ThreadPoolExecutor(16) as pool:
+    with ThreadPoolExecutor(workers) as pool:
         role_lists = list(pool.map(roles_at, list(locations)))
 
     roles = []
@@ -139,11 +157,11 @@ def fetch_payer(key, city, state, max_locations):
 
     # Resolve practitioners (for NPI + name) and network names.
     prac_ids = sorted({r["practitioner"]["reference"].split("/")[-1] for r, _ in roles if r.get("practitioner")})
-    with ThreadPoolExecutor(16) as pool:
+    with ThreadPoolExecutor(workers) as pool:
         pracs = dict(zip(prac_ids, pool.map(lambda i: get(f"{base}/Practitioner/{i}"), prac_ids)))
     net_ids = sorted({e["valueReference"]["reference"].split("/")[-1]
                       for r, _ in roles for e in ext(r, "network-reference") if e.get("valueReference")})
-    with ThreadPoolExecutor(16) as pool:
+    with ThreadPoolExecutor(workers) as pool:
         nets = dict(zip(net_ids, pool.map(lambda i: get(f"{base}/Organization/{i}"), net_ids)))
 
     listings = []
@@ -184,7 +202,10 @@ def fetch_payer(key, city, state, max_locations):
 
 
 def nppes(npi):
-    d = get(f"https://npiregistry.cms.hhs.gov/api/?version=2.1&number={npi}")
+    try:
+        d = get(f"https://npiregistry.cms.hhs.gov/api/?version=2.1&number={npi}")
+    except Blocked:
+        return None
     res = (d.get("results") or [None])[0]
     if not res:
         return None
@@ -213,17 +234,37 @@ def main():
     os.makedirs(CACHE, exist_ok=True)
     os.makedirs(os.path.join(ROOT, "data"), exist_ok=True)
 
-    listings = []
+    path = os.path.join(ROOT, "data", f"raw_{args.city.lower().replace(' ', '-')}.json.gz")
+    previous = {"listings": [], "registry": {}}
+    if os.path.exists(path):
+        with gzip.open(path, "rt") as f:
+            previous = json.load(f)
+
+    # Merge into the existing file: insurers not in --payers are kept, and an
+    # insurer whose API fails or returns nothing keeps last run's listings
+    # rather than vanishing from the site.
+    listings, fetched = [], set()
     for key in args.payers.split(","):
         try:
-            listings += fetch_payer(key, args.city, args.state, args.max_locations)
+            got = fetch_payer(key, args.city, args.state, args.max_locations)
         except Exception as e:
             print(f"[{key}] failed: {e}", file=sys.stderr)
+            got = []
+        if got:
+            listings += got
+            fetched.add(key)
+        else:
+            print(f"[{key}] no data this run; keeping previous listings", file=sys.stderr)
+    listings += [l for l in previous["listings"] if l["payer"] not in fetched]
+    global PAUSE
+    PAUSE = 0.0
 
     npis = sorted({l["npi"] for l in listings})
-    print(f"enriching {len(npis)} NPIs from NPPES", file=sys.stderr)
+    todo = [n for n in npis if fetched & {l["payer"] for l in listings if l["npi"] == n} or n not in previous["registry"]]
+    print(f"enriching {len(todo)} NPIs from NPPES", file=sys.stderr)
     with ThreadPoolExecutor(8) as pool:
-        registry = dict(zip(npis, pool.map(nppes, npis)))
+        registry = {n: previous["registry"].get(n) for n in npis}
+        registry.update(zip(todo, pool.map(nppes, todo)))
 
     out = {
         "city": args.city, "state": args.state,
@@ -231,7 +272,6 @@ def main():
         "payers": {k: PAYERS[k]["name"] for k in PAYERS},
         "listings": listings, "registry": registry,
     }
-    path = os.path.join(ROOT, "data", f"raw_{args.city.lower().replace(' ', '-')}.json.gz")
     with gzip.open(path, "wt") as f:
         json.dump(out, f)
     print(f"wrote {path}: {len(listings)} listings, {len(npis)} providers", file=sys.stderr)

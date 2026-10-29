@@ -8,9 +8,10 @@ Static, SEO-first site generated from public data. Cities: see `data/cities.json
 1. `pipeline/fetch.py` pulls the public provider directories that federal rules
    (CMS Interoperability rule, Da Vinci PDex Plan-Net FHIR) require insurers to
    publish: in-network status, the "accepting new patients" flag, plan networks,
-   office location and phone. Live sources: Cigna and UnitedHealthcare (Optum). Humana's API can't be
-   searched by location, and Kaiser's records carry no specialty codes, so both
-   are wired in but contribute nothing yet. Each provider is then looked up by NPI in the federal NPPES
+   office location and phone. Live sources: Cigna, UnitedHealthcare (Optum) and Humana. Kaiser's records
+   carry no specialty codes, so it is wired in but contributes nothing yet.
+   Each run merges into the existing file: an insurer whose API fails keeps
+   last week's listings instead of disappearing. Each provider is then looked up by NPI in the federal NPPES
    registry.
 2. `pipeline/build.py` merges listings per NPI, runs 7 cross-checks (accepting
    flag, record freshness, active NPI, ZIP match, phone match, multi-insurer,
@@ -19,7 +20,8 @@ Static, SEO-first site generated from public data. Cities: see `data/cities.json
 Cities live in `data/cities.json`; add one there and the next weekly run picks it up.
 
 ```bash
-sh pipeline/fetch_all.sh            # every city in data/cities.json
+sh pipeline/fetch_all.sh            # every city in data/cities.json, 3 at a time
+PAYERS=humana sh pipeline/fetch_all.sh   # refresh one insurer only
 python3 -I pipeline/fetch.py --city Denver --state CO   # or a single city
 python3 -I pipeline/build.py --site-url https://your-domain.com
 python3 -m http.server -d dist 8080
