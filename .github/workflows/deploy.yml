@@ -72,9 +72,10 @@ jobs:
         uses: actions/deploy-pages@v4
 
   ping-search-engines:
-    # After a data refresh, tell IndexNow engines (Bing et al.) to recrawl.
+    # After code pushes and data refreshes (not the daily report rebuilds),
+    # tell IndexNow engines (Bing et al.) to recrawl.
     needs: deploy
-    if: github.event.schedule == '17 9 * * 1' || inputs.refresh
+    if: github.event_name == 'push' || github.event.schedule == '17 9 * * 1' || inputs.refresh
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

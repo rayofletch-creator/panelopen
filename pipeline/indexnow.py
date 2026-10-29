@@ -14,8 +14,12 @@ KEY = "45f44ddf0396434f20b673af40391760"  # also served at /<KEY>.txt (static/)
 
 def main():
     site = sys.argv[1].rstrip("/")
-    with urllib.request.urlopen(urllib.request.Request(f"{site}/sitemap.xml", headers={"User-Agent": "NowAccepting/0.1"}), timeout=60) as r:
-        urls = re.findall(r"<loc>(.*?)</loc>", r.read().decode())
+    def locs(url):
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "NowAccepting/0.1"}), timeout=60) as r:
+            return re.findall(r"<loc>(.*?)</loc>", r.read().decode())
+    urls = []
+    for loc in locs(f"{site}/sitemap.xml"):  # a sitemap index: expand each child
+        urls += locs(loc) if loc.endswith(".xml") else [loc]
     host = urllib.parse.urlparse(site).netloc
     for i in range(0, len(urls), 10000):
         body = json.dumps({"host": host, "key": KEY, "keyLocation": f"{site}/{KEY}.txt", "urlList": urls[i:i + 10000]}).encode()

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import gzip
+import importlib.util
 import shutil
 from collections import defaultdict
 from urllib.parse import urlparse
@@ -49,6 +50,11 @@ def digits(s):
 def fmt_phone(p):
     d = digits(p)
     return f"({d[:3]}) {d[3:6]}-{d[6:]}" if len(d) == 10 else (p or "")
+
+
+def clip(s, n):
+    """Trim to n characters at a word boundary (titles/descriptions Google truncates)."""
+    return s if len(s) <= n else s[:n - 1].rsplit(" ", 1)[0].rstrip(",;:—-") + "…"
 
 
 def fmt_date(s):
@@ -192,7 +198,7 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(title)}</title>
-<meta name="description" content="{e(desc)}">
+<meta name="description" content="{e(clip(desc, 155))}">
 <link rel="canonical" href="{e(url)}">
 {'<meta name="robots" content="noindex, follow">' if noindex else ''}
 <meta property="og:type" content="website">
@@ -200,7 +206,11 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{e(url)}">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="{ctx['site']}/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{ctx['site']}/og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/site.css">
 {f'<meta name="forms-endpoint" content="{e(ctx["forms"])}">' if ctx["forms"] else ''}
@@ -229,7 +239,7 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
       <div><p class="foot-brand">{BRAND}</p><p class="muted">Find in-network providers who are actually taking new patients. Data from insurers' public directories and the federal NPI registry, cross-checked and scored.</p></div>
       <div><p class="foot-h">Cities</p>{''.join(f'<a href="{path}">{e(name)}</a>' for name, path in ctx["cities"])}</div>
       <div><p class="foot-h">Insurance</p>{''.join(f'<a href="/insurance/{s}/">{e(ctx["payers"][k])}</a>' for k, s in PAYER_SLUG.items() if k in ctx["active_payers"])}</div>
-      <div><p class="foot-h">{BRAND}</p><a href="/how-we-verify/">How we verify</a><a href="/reports/colorado-insurance-directory-accuracy/">Directory accuracy report</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
+      <div><p class="foot-h">{BRAND}</p><a href="/guides/">Guides</a><a href="/how-we-verify/">How we verify</a><a href="/reports/colorado-insurance-directory-accuracy/">Directory accuracy report</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
     </div>
     <p class="muted small">Listings are informational and not a guarantee of coverage or availability. Always confirm network status with your insurer and the provider before booking. Data last refreshed {fmt_date(ctx["generated"])}.</p>
   </div>
@@ -382,8 +392,9 @@ def listing_pages(ctx, base_path, crumbs, h1, intro, title, desc, providers, faq
 {insights(ctx, acc, fixed_cat, fixed_ins) if i == 0 else ''}
 {monetization_slot(ctx, next((k for k, s in PAYER_SLUG.items() if s == fixed_ins), None), fixed_cat) if i == 0 else ''}
 {extra_links if i == 0 else ''}
+{link_grid("Before you call", [(t, p, "") for t, p in GUIDE_LINKS]) if i == 0 else ''}
 {faq_html}"""
-        page(ctx, path, title if i == 0 else f"{title} — Page {i + 1}", desc, body, crumbs, [item_ld] + ([faq_ld] if faq_ld else []), noindex=noindex)
+        page(ctx, path, title if i == 0 else f"{title} — Page {i + 1}", desc, body, crumbs, [item_ld] + ([faq_ld] if faq_ld else []), noindex=noindex or i > 0)
     return len(acc)
 
 
@@ -393,7 +404,7 @@ def link_grid(title, links):
     return f'<section class="links"><h2>{e(title)}</h2><ul>' + "".join(f'<li><a href="{h}">{e(n)}</a> <span class="muted">{c}</span></li>' for n, h, c in links) + "</ul></section>"
 
 
-def provider_page(ctx, p, city_path, city):
+def provider_page(ctx, p, city_path, city, peers=()):
     cats = ", ".join(CATS[c][1] for c in p["cats"])
     rows = ""
     for k, pl in sorted(p["plans"].items(), key=lambda x: x[1]["accepting"] != "yes"):
@@ -438,12 +449,32 @@ def provider_page(ctx, p, city_path, city):
 <h3>Before you call</h3><p class="script" data-copy>{e(script)}</p><button class="btn btn-ghost btn-sm" type="button" data-copy-btn>Copy script</button></section>
 </div>
 <section class="panel"><h2>Specialties on record</h2><p>{e(', '.join(p['specialties']))}</p><p class="muted small">NPI {p['npi']} · <a href="https://npiregistry.cms.hhs.gov/provider-view/{p['npi']}" rel="nofollow noopener" target="_blank">View federal NPI record</a></p></section>
+{related(ctx, p, city_path, city, peers)}
 <aside class="claim"><div><h2>Are you {e(p['name'])}?</h2><p>Confirm your availability in 30 seconds so patients stop calling when you're full — and get a booking link on this page.</p></div><a class="btn" href="/for-providers/?npi={p['npi']}">Claim this profile</a></aside>
 </article>"""
     desc = f"{full} — {cats} in {city}. " + (f"Listed as accepting new patients with {accepting}. " if accepting else "") + f"Confidence: {LEVEL_LABEL[p['level']].lower()}."
-    title = f"{full} — {cats.split(',')[0].title()} in {city}" + (f" | Takes {accepting}" if accepting and len(accepting) < 40 else "")
+    short = p["name"] + (", " + re.split(r"[ ,]", p["credential"])[0] if p["credential"] else "")
+    title = f"{short} — {cats.split(',')[0].title()} in {city}"
+    if accepting and len(title) + len(accepting) + 9 <= 62:
+        title += f" | Takes {accepting}"
     crumbs = [("Home", "/"), (city, city_path), (CATS[p["cats"][0]][0], f"{city_path}{p['cats'][0]}/"), (p["name"], f"/provider/{p['slug']}/")]
     page(ctx, f"/provider/{p['slug']}/", title, desc, body, crumbs, [ld], noindex=p["level"] in ("none", "low"))
+
+
+def related(ctx, p, city_path, city, peers):
+    """Similar providers plus the listing pages this profile belongs to."""
+    cat = p["cats"][0]
+    payer = (p["accepting_payers"] or list(p["plans"]))[0]
+    plural = CATS[cat][0]
+    items = "".join(
+        f'<li><a href="/provider/{q["slug"]}/">{e(q["name"])}{", " + e(q["credential"]) if q["credential"] else ""}</a> '
+        f'<span class="muted">{LEVEL_LABEL[q["level"]]}</span></li>' for q in peers)
+    hub = (f'<p><a href="{city_path}{cat}/{PAYER_SLUG[payer]}/">All {e(plural.lower())} in {e(city)} taking {e(ctx["payers"][payer])}</a>'
+           f' · <a href="{city_path}{cat}/">All {e(plural.lower())} in {e(city)}</a> · <a href="{city_path}">Everything in {e(city)}</a></p>')
+    if not items:
+        return f'<section class="panel"><h2>Keep looking</h2>{hub}</section>'
+    return (f'<section class="panel"><h2>Other {e(plural.lower())} in {e(city)} taking {e(ctx["payers"][payer])}</h2>'
+            f'<ul class="plain">{items}</ul>{hub}</section>')
 
 
 def pay_button(ctx, plan, label, cls):
@@ -511,7 +542,7 @@ def static_pages(ctx, city_path, city):
 <li><strong>Data partnerships.</strong> We sell aggregated directory-accuracy reports to employers, brokers and researchers. We never sell anything about you.</li></ul>
 <h2>Not medical advice</h2><p>Listings are informational. Always confirm coverage with your insurer.</p></article>""",
          [("Home", "/"), ("About", "/about/")])
-    page(ctx, "/privacy/", f"Privacy | {BRAND}", f"{BRAND} doesn't use ad trackers or sell personal data.",
+    page(ctx, "/privacy/", f"Privacy | {BRAND}", f"{BRAND} doesn't use ad trackers, retargeting pixels or sell personal data. Searching for care stays private: no account, no health information collected.",
          """<article class="prose"><h1>Privacy</h1><p class="lede">Searching for mental health care is sensitive. We built this site so nothing about your search leaves it.</p>
 <ul><li>No advertising pixels, retargeting, or third-party trackers.</li><li>No account needed to search.</li><li>Call reports store only the provider, the outcome, the wait time and the date — never your name or health information.</li><li>Providers who claim a profile give us a work email, used only to verify and contact them about their listing.</li><li>We use privacy-friendly, cookie-free page counts only.</li></ul></article>""",
          [("Home", "/"), ("Privacy", "/privacy/")])
@@ -533,7 +564,7 @@ def build_city(ctx, raw, city, st, city_path, providers):
                               [("Home", "/"), (city, city_path), (plural, f"{city_path}{c}/"), (raw["payers"][k], f"{city_path}{c}/{s}/")],
                               f"{plural} in {city} that take {raw['payers'][k]}",
                               f"{e(blurb)} who are in-network with <strong>{e(raw['payers'][k])}</strong> and listed as accepting new patients. Sorted by how confident we are the listing is accurate.",
-                              f"{plural} in {city} Accepting {raw['payers'][k]} — New Patients ({datetime.now():%b %Y})",
+                              f"{city} {plural} Taking {raw['payers'][k]}" + (" — New Patients" if len(f"{city} {plural} Taking {raw['payers'][k]}") <= 50 else ""),
                               f"{len(pk)} {plural.lower()} in {cityname} in-network with {raw['payers'][k]} and accepting new patients, each with an accuracy score from cross-checked public data.",
                               pk, fixed_cat=c, fixed_ins=s,
                               faq=[(f"How do I find a {singular} in {city} that takes {raw['payers'][k]}?", f"Every {singular} on this page is listed in {raw['payers'][k]}'s own provider directory as in-network and accepting new patients. We cross-check each listing against the federal NPI registry and score how likely it is to be accurate. Start with high-confidence listings and confirm your specific plan when you call."),
@@ -543,7 +574,7 @@ def build_city(ctx, raw, city, st, city_path, providers):
         n = listing_pages(ctx, f"{city_path}{c}/", [("Home", "/"), (city, city_path), (plural, f"{city_path}{c}/")],
                           f"{plural} accepting new patients in {city}",
                           f"{e(blurb)} in {e(cityname)} that at least one insurer lists as in-network and accepting new patients — ranked by how confident we are the listing is real.",
-                          f"{plural} Accepting New Patients in {city}, {st} — In-Network ({datetime.now():%b %Y})",
+                          f"{city} {plural} Accepting New Patients" + (f" ({datetime.now():%b %Y})" if len(f"{city} {plural} Accepting New Patients") <= 54 else ""),
                           f"Find {plural.lower()} in {cityname} who take your insurance and are accepting new patients. {len([p for p in ps if p['level'] != 'none'])} listings, each scored for accuracy.",
                           ps, fixed_cat=c, extra_links=link_grid(f"{plural} by insurance", sub_links),
                           faq=[(f"Are these {plural.lower()} really accepting new patients?", "Each one is marked as accepting new patients in at least one insurer's official directory. Because those directories are often wrong, we score each listing using cross-checks against the federal NPI registry, so you can call the most reliable ones first."),
@@ -561,7 +592,7 @@ def build_city(ctx, raw, city, st, city_path, providers):
 {link_grid("Choose the type of care", cat_links)}
 {link_grid("Or start with your insurance", ins_links)}
 {link_grid("Nearby cities", others)}"""
-    page(ctx, city_path, f"Doctors & Therapists Accepting New Patients in {city}, {st} | {BRAND}",
+    page(ctx, city_path, f"{city} Doctors & Therapists Accepting New Patients",
          f"Find in-network therapists, psychiatrists and doctors in {cityname} who are actually accepting new patients. Updated {fmt_date(raw['generated'])}.",
          body, [("Home", "/"), (city, city_path)])
     return len(accepting), hi
@@ -615,10 +646,46 @@ def report_page(ctx, raws, providers):
           "author": {"@type": "Organization", "name": BRAND, "url": ctx["site"] + "/"}, "publisher": {"@type": "Organization", "name": BRAND},
           "about": "Accuracy of health insurer provider directories"}
     slug = f"/reports/{slugify(region)}-insurance-directory-accuracy/"
-    page(ctx, slug, f"{headline} | {BRAND}",
+    page(ctx, slug, f"{region} Provider Directory Accuracy: {n:,} Listings Checked",
          f"Original data: only {pct(lv['high'], n)} of {n:,} {region} providers in insurer directories passed our accuracy cross-checks. Findings by insurer, methodology and sources.",
          body, [("Home", "/"), ("Reports", slug)], [ld])
     return slug
+
+
+def load_guides():
+    # build.py runs with -I (isolated), so its own folder isn't importable by name.
+    spec = importlib.util.spec_from_file_location("guides", os.path.join(os.path.dirname(os.path.abspath(__file__)), "guides.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.GUIDES
+
+
+GUIDE_LINKS = []  # (title, path), filled by guide_pages for footers and listing pages
+
+
+def guide_pages(ctx):
+    guides = load_guides()
+    GUIDE_LINKS[:] = [(g["title"], f"/guides/{g['slug']}/") for g in guides]
+    for g in guides:
+        path = f"/guides/{g['slug']}/"
+        faq_html, faq_ld = faq_block(g["faq"])
+        others = "".join(f'<li><a href="{p}">{e(t)}</a></li>' for t, p in GUIDE_LINKS if p != path)
+        body = f"""<article class="prose report"><p class="tag">Guide · updated {fmt_date(ctx['generated'])}</p><h1>{e(g['h1'])}</h1>
+<p class="lede">{g['intro']}</p>
+{''.join(f'<h2>{e(h)}</h2>{html_}' for h, html_ in g['sections'])}
+</article>
+{faq_html}
+<aside class="claim"><div><h2>Find someone who's actually taking patients</h2><p>Search in-network providers by city and insurer, ranked by how likely the listing is accurate.</p></div><a class="btn" href="/">Search now</a></aside>
+<section class="links"><h2>More guides</h2><ul>{others}</ul></section>"""
+        ld = {"@context": "https://schema.org", "@type": "Article", "headline": g["h1"], "description": g["desc"],
+              "datePublished": "2026-10-29", "dateModified": ctx["generated"],
+              "author": {"@type": "Organization", "name": BRAND, "url": ctx["site"] + "/"}, "publisher": {"@type": "Organization", "name": BRAND}}
+        page(ctx, path, g["title"], g["desc"], body, [("Home", "/"), ("Guides", "/guides/"), (g["title"], path)], [ld, faq_ld])
+    items = "".join(f'<li><a href="/guides/{g["slug"]}/">{e(g["title"])}</a> <span class="muted">{e(g["desc"])}</span></li>' for g in guides)
+    page(ctx, "/guides/", "Guides: Finding In-Network Care That's Accepting Patients",
+         "Practical guides to finding an in-network therapist or doctor with openings: ghost networks, what to ask when you call, and your options if no one is available.",
+         f'<header class="hero-sm"><h1>Guides</h1><p class="lede">Practical help for finding in-network care that is actually available.</p></header><section class="links"><ul>{items}</ul></section>',
+         [("Home", "/"), ("Guides", "/guides/")])
 
 
 def build(raws, site, partners, forms_url, reports, payments):
@@ -636,6 +703,7 @@ def build(raws, site, partners, forms_url, reports, payments):
     ctx = {"site": site.rstrip("/"), "base": urlparse(site).path.rstrip("/"), "payers": first["payers"], "active_payers": active,
            "generated": combined["generated"], "sitemap": [], "partners": partners, "forms": forms_url, "payments": payments,
            "cities": [(f"{c}, {st}", path) for c, st, path, _ in cities]}
+    guide_pages(ctx)
     city_stats = []
     for city, st, path, r in cities:
         n, hi = build_city(ctx, r, city, st, path, [p for p in providers if path in p["src"]])
@@ -650,14 +718,22 @@ def build(raws, site, partners, forms_url, reports, payments):
         listing_pages(ctx, f"/insurance/{s}/", [("Home", "/"), (first["payers"][k], f"/insurance/{s}/")],
                       f"In-network providers that take {first['payers'][k]}",
                       f"Therapists, psychiatrists and doctors listed in <strong>{e(first['payers'][k])}</strong>'s directory as accepting new patients, scored for accuracy.",
-                      f"Find Doctors & Therapists That Take {first['payers'][k]} — Accepting New Patients",
+                      f"Doctors & Therapists Taking {first['payers'][k]} — New Patients",
                       f"{len(pk)} providers in-network with {first['payers'][k]} and accepting new patients across {len(cities)} cities, with accuracy scores.",
                       pk, fixed_ins=s, extra_links=link_grid(f"{first['payers'][k]} by city and type of care", links))
 
     city_by_path = {path: (city, path) for city, st, path, _ in cities}
+    by_group = defaultdict(list)  # (city, care type, insurer) -> strong listings, best first
+    for p in providers:
+        if p["level"] in ("high", "medium"):
+            for path in p["src"]:
+                for k in p["accepting_payers"]:
+                    by_group[(path, p["cats"][0], k)].append(p)
     for p in providers:
         city, path = city_by_path[p["src"][0]]
-        provider_page(ctx, p, path, city)
+        payer = (p["accepting_payers"] or list(p["plans"]))[0]
+        peers = [q for q in by_group[(path, p["cats"][0], payer)] if q["npi"] != p["npi"]][:6]
+        provider_page(ctx, p, path, city, peers)
 
     report_url = report_page(ctx, raws, providers)
 
@@ -684,18 +760,33 @@ def build(raws, site, partners, forms_url, reports, payments):
 <div><span class="num">3</span><h2>You call the likely ones first</h2><p>Listings are ranked by confidence. Report what happened, and the next person gets better data.</p></div></section>
 <div id="cities">{city_grid}</div>
 <aside class="claim"><div><h2>How accurate are insurer directories?</h2><p>We checked every listing against the federal registry. See the numbers.</p></div><a class="btn" href="{report_url}">Read the report</a></aside>"""
-    page(ctx, "/", f"{BRAND} — In-Network Therapists & Doctors Accepting New Patients",
+    page(ctx, "/", "Find In-Network Therapists & Doctors Accepting New Patients",
          "Find therapists, psychiatrists and doctors who take your insurance and are actually accepting new patients. Every listing cross-checked and scored for accuracy.",
          body, jsonld=[{"@context": "https://schema.org", "@type": "WebSite", "name": BRAND, "url": ctx["site"] + "/"},
                       {"@context": "https://schema.org", "@type": "Organization", "name": BRAND, "url": ctx["site"] + "/", "logo": ctx["site"] + "/favicon.svg"}])
     static_pages(ctx, cities[0][2], cities[0][0])
 
-    # SEO plumbing
+    page(ctx, "/404.html", f"Page not found | {BRAND}", "This page doesn't exist. Search in-network providers accepting new patients by city and insurer.",
+         f"""<header class="hero-sm"><h1>We couldn't find that page</h1><p class="lede">The listing may have moved or the provider may no longer be in-network. Try one of these instead.</p></header>
+{link_grid("Search by city", [(name, path, "") for name, path in ctx["cities"]])}
+{link_grid("Guides", [(t, p, "") for t, p in GUIDE_LINKS])}""", noindex=True)
+
+    # SEO plumbing: a sitemap index so Search Console reports each section separately
+    groups = {"providers": [p for p in ctx["sitemap"] if p.startswith("/provider/")],
+              "listings": [p for p in ctx["sitemap"] if p.count("/") >= 3 and not p.startswith(("/provider/", "/guides/", "/reports/"))],
+              }
+    groups["pages"] = [p for p in ctx["sitemap"] if p not in set(groups["providers"]) | set(groups["listings"])]
+    for name, paths in groups.items():
+        with open(os.path.join(DIST, f"sitemap-{name}.xml"), "w") as f:
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
+            for path in paths:
+                f.write(f"<url><loc>{ctx['site']}{path}</loc><lastmod>{ctx['generated']}</lastmod></url>\n")
+            f.write("</urlset>\n")
     with open(os.path.join(DIST, "sitemap.xml"), "w") as f:
-        f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
-        for path in ctx["sitemap"]:
-            f.write(f"<url><loc>{ctx['site']}{path}</loc><lastmod>{ctx['generated']}</lastmod></url>\n")
-        f.write("</urlset>\n")
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
+        for name in groups:
+            f.write(f"<sitemap><loc>{ctx['site']}/sitemap-{name}.xml</loc><lastmod>{ctx['generated']}</lastmod></sitemap>\n")
+        f.write("</sitemapindex>\n")
     with open(os.path.join(DIST, "robots.txt"), "w") as f:
         f.write(f"User-agent: *\nAllow: /\nDisallow: {ctx['base']}/report/\nSitemap: {ctx['site']}/sitemap.xml\n")
     return providers, ctx, city_stats
