@@ -36,6 +36,9 @@ so links from credible sites matter more than anything else on this list.
 - Social card (og:image), 404 page, IndexNow ping on every push
 - Indexing requested in Search Console (Oct 29): home, report, find-a-therapist guide
 - Audit (Oct 29): 5,407 pages, 0 broken internal links, 0 invalid JSON-LD, 0 duplicate titles
+- State hubs (/co/, /tx/) with statewide care-type and insurer pages; breadcrumbs run Home > State > City
+- Online-care pages (/co/telehealth/, /tx/telehealth/) by care type and insurer, plus a guide on online therapy coverage
+- Audit (Oct 30): 10,046 pages, 5,254 indexable, 0 broken internal links, 0 invalid JSON-LD, 0 duplicate titles
 
 ## Do this week (needs you)
 

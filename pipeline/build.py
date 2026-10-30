@@ -407,6 +407,11 @@ def listing_pages(ctx, base_path, crumbs, h1, intro, title, desc, providers, faq
     return len(acc)
 
 
+def state_crumb(city_path):
+    st = city_path.split("/")[1].upper()
+    return (STATE_NAMES.get(st, st), f"/{st.lower()}/")
+
+
 def link_grid(title, links):
     if not links:
         return ""
@@ -466,7 +471,7 @@ def provider_page(ctx, p, city_path, city, peers=()):
     title = f"{short} — {cats.split(',')[0].title()} in {city}"
     if accepting and len(title) + len(accepting) + 9 <= 62:
         title += f" | Takes {accepting}"
-    crumbs = [("Home", "/"), (city, city_path), (CATS[p["cats"][0]][0], f"{city_path}{p['cats'][0]}/"), (p["name"], f"/provider/{p['slug']}/")]
+    crumbs = [("Home", "/"), state_crumb(city_path), (city, city_path), (CATS[p["cats"][0]][0], f"{city_path}{p['cats'][0]}/"), (p["name"], f"/provider/{p['slug']}/")]
     page(ctx, f"/provider/{p['slug']}/", title, desc, body, crumbs, [ld], noindex=p["level"] in ("none", "low"))
 
 
@@ -570,7 +575,7 @@ def build_city(ctx, raw, city, st, city_path, providers):
             s = PAYER_SLUG[k]
             pk = [p for p in ps if k in p["accepting_payers"]]
             n = listing_pages(ctx, f"{city_path}{c}/{s}/",
-                              [("Home", "/"), (city, city_path), (plural, f"{city_path}{c}/"), (raw["payers"][k], f"{city_path}{c}/{s}/")],
+                              [("Home", "/"), state_crumb(city_path), (city, city_path), (plural, f"{city_path}{c}/"), (raw["payers"][k], f"{city_path}{c}/{s}/")],
                               f"{plural} in {city} that take {raw['payers'][k]}",
                               f"{e(blurb)} who are in-network with <strong>{e(raw['payers'][k])}</strong> and listed as accepting new patients. Sorted by how confident we are the listing is accurate.",
                               f"{city} {plural} Taking {raw['payers'][k]}" + (" — New Patients" if len(f"{city} {plural} Taking {raw['payers'][k]}") <= 50 else ""),
@@ -580,7 +585,7 @@ def build_city(ctx, raw, city, st, city_path, providers):
                                    ("Why do some listings say low confidence?", "Low confidence means the insurer's record is old, the address or phone doesn't match the federal registry, or insurers disagree. Those providers may still have openings, but call before relying on them.")])
             if pk:
                 sub_links.append((f"{plural} that take {raw['payers'][k]}", f"{city_path}{c}/{s}/", f"{n} accepting"))
-        n = listing_pages(ctx, f"{city_path}{c}/", [("Home", "/"), (city, city_path), (plural, f"{city_path}{c}/")],
+        n = listing_pages(ctx, f"{city_path}{c}/", [("Home", "/"), state_crumb(city_path), (city, city_path), (plural, f"{city_path}{c}/")],
                           f"{plural} accepting new patients in {city}",
                           f"{e(blurb)} in {e(cityname)} that at least one insurer lists as in-network and accepting new patients — ranked by how confident we are the listing is real.",
                           f"{city} {plural} Accepting New Patients" + (f" ({datetime.now():%b %Y})" if len(f"{city} {plural} Accepting New Patients") <= 54 else ""),
@@ -600,11 +605,116 @@ def build_city(ctx, raw, city, st, city_path, providers):
 <p class="lede">{len(accepting)} providers in {e(cityname)} are listed by their insurer as accepting new patients. {hi} pass enough cross-checks to earn high confidence.</p></header>
 {link_grid("Choose the type of care", cat_links)}
 {link_grid("Or start with your insurance", ins_links)}
-{link_grid(f"Other {STATE_NAMES.get(st, st)} cities", others)}"""
+{link_grid(f"Other {STATE_NAMES.get(st, st)} cities", others)}
+{link_grid("Wider search", [(f"All of {STATE_NAMES.get(st, st)}", f"/{st.lower()}/", "")] + ([(f"Online care in {STATE_NAMES.get(st, st)}", f"/{st.lower()}/telehealth/", "")] if st in ctx["tele_states"] else []))}"""
     page(ctx, city_path, f"{city} Doctors & Therapists Accepting New Patients",
          f"Find in-network therapists, psychiatrists and doctors in {cityname} who are actually accepting new patients. Updated {fmt_date(raw['generated'])}.",
-         body, [("Home", "/"), (city, city_path)])
+         body, [("Home", "/"), state_crumb(city_path), (city, city_path)])
     return len(accepting), hi
+
+
+def build_state(ctx, st, paths, providers):
+    """Statewide hub, care-type and care-type x insurer pages, plus online care.
+    Telehealth gets its own pages because it isn't tied to one city."""
+    name = STATE_NAMES.get(st, st)
+    root = f"/{st.lower()}/"
+    payers = ctx["payers"]
+    in_state = [p for p in providers if paths & set(p["src"])]
+    accepting = [p for p in in_state if p["level"] != "none"]
+    home = [("Home", "/"), (name, root)]
+    coverage = f"the {len(paths)} {name} cities we cover"
+    cat_links, ins_links = [], []
+    for c, (plural, singular, blurb) in CATS.items():
+        ps = [p for p in in_state if c in p["cats"]]
+        sub_links = []
+        for k in ctx["active_payers"]:
+            pk = [p for p in ps if k in p["accepting_payers"]]
+            n = sum(1 for p in pk if p["level"] != "none")
+            if not n:
+                continue
+            title = f"{name} {plural} Taking {payers[k]}"
+            listing_pages(ctx, f"{root}{c}/{PAYER_SLUG[k]}/", home + [(plural, f"{root}{c}/"), (payers[k], f"{root}{c}/{PAYER_SLUG[k]}/")],
+                          f"{plural} in {name} that take {payers[k]}",
+                          f"{e(blurb)} in {e(coverage)}, in-network with <strong>{e(payers[k])}</strong> and listed as accepting new patients. Sorted by how confident we are the listing is accurate.",
+                          title + (" — New Patients" if len(title) <= 50 else ""),
+                          f"{n} {plural.lower()} in {name} in-network with {payers[k]} and accepting new patients, each with an accuracy score from cross-checked public data.",
+                          pk, fixed_cat=c, fixed_ins=PAYER_SLUG[k])
+            sub_links.append((f"{plural} that take {payers[k]}", f"{root}{c}/{PAYER_SLUG[k]}/", f"{n:,} accepting"))
+        n = sum(1 for p in ps if p["level"] != "none")
+        if not n:
+            continue
+        city_links = [(f"{plural} in {city.split(',')[0]}", f"{path}{c}/", f"{sum(1 for p in ps if p['level'] != 'none' and path in p['src']):,} accepting")
+                      for city, path in ctx["cities"] if path in paths and any(path in p["src"] for p in ps)]
+        listing_pages(ctx, f"{root}{c}/", home + [(plural, f"{root}{c}/")],
+                      f"{plural} accepting new patients in {name}",
+                      f"{e(blurb)} in {e(coverage)} that at least one insurer lists as in-network and accepting new patients, ranked by how confident we are the listing is real.",
+                      f"{name} {plural} Accepting New Patients",
+                      f"Find {plural.lower()} in {name} who take your insurance and are accepting new patients. {n:,} listings, each scored for accuracy.",
+                      ps, fixed_cat=c, extra_links=link_grid(f"{plural} by insurance", sub_links) + link_grid(f"{plural} by city", city_links))
+        cat_links.append((plural, f"{root}{c}/", f"{n:,} accepting"))
+    for k in ctx["active_payers"]:
+        n = sum(1 for p in accepting if k in p["accepting_payers"])
+        if n:
+            ins_links.append((f"{payers[k]} in {name}", f"/insurance/{PAYER_SLUG[k]}/", f"{n:,} accepting"))
+    tele_links = build_telehealth(ctx, st, in_state)
+    hi = sum(1 for p in accepting if p["level"] == "high")
+    city_links = [(city, path, f"{sum(1 for p in accepting if path in p['src']):,} accepting") for city, path in ctx["cities"] if path in paths]
+    body = f"""<header class="hero-sm"><h1>In-network care accepting new patients in {e(name)}</h1>
+<p class="lede">{len(accepting):,} providers in {e(coverage)} are listed by their insurer as accepting new patients. {hi:,} pass enough cross-checks to earn high confidence.</p></header>
+{link_grid("Choose a city", city_links)}
+{link_grid("Choose the type of care", cat_links)}
+{link_grid("Online care", tele_links)}
+{link_grid("Or start with your insurance", ins_links)}
+{link_grid("Directory accuracy", [(f"How accurate are {name} insurer directories?", f"/reports/{name.lower()}-insurance-directory-accuracy/", "")])}"""
+    page(ctx, root, f"{name} Doctors & Therapists Accepting New Patients",
+         f"Find in-network therapists, psychiatrists and doctors in {name} who are actually accepting new patients. {len(accepting):,} listings, each scored for accuracy.",
+         body, home)
+    return len(accepting), hi
+
+
+def build_telehealth(ctx, st, in_state):
+    """/xx/telehealth/ pages. Combos with too few listings are skipped, not built."""
+    name = STATE_NAMES.get(st, st)
+    root = f"/{st.lower()}/telehealth/"
+    payers = ctx["payers"]
+    online = [p for p in in_state if p["telehealth"] and p["level"] != "none"]
+    if len(online) < MIN_INDEXABLE:
+        return []
+    home = [("Home", "/"), (name, f"/{st.lower()}/"), ("Online care", root)]
+    note = f"These providers list a telehealth or virtual-visit location in an insurer's directory. Confirm they're licensed in {e(name)} and in-network for your plan when you call."
+    links = []
+    for c, (plural, singular, blurb) in CATS.items():
+        ps = [p for p in online if c in p["cats"]]
+        if len(ps) < MIN_INDEXABLE:
+            continue
+        sub_links = []
+        for k in ctx["active_payers"]:
+            pk = [p for p in ps if k in p["accepting_payers"]]
+            if len(pk) < MIN_INDEXABLE:
+                continue
+            listing_pages(ctx, f"{root}{c}/{PAYER_SLUG[k]}/", home + [(plural, f"{root}{c}/"), (payers[k], f"{root}{c}/{PAYER_SLUG[k]}/")],
+                          f"Online {plural.lower()} in {name} that take {payers[k]}",
+                          f"In-network with <strong>{e(payers[k])}</strong> and listed as accepting new patients. {note}",
+                          f"Online {plural} in {name} Taking {payers[k]}",
+                          f"{len(pk)} online {plural.lower()} in {name} in-network with {payers[k]} and accepting new patients, each scored for accuracy.",
+                          pk, fixed_cat=c, fixed_ins=PAYER_SLUG[k])
+            sub_links.append((f"Online {plural.lower()} that take {payers[k]}", f"{root}{c}/{PAYER_SLUG[k]}/", f"{len(pk)} accepting"))
+        listing_pages(ctx, f"{root}{c}/", home + [(plural, f"{root}{c}/")],
+                      f"Online {plural.lower()} in {name} that take insurance",
+                      f"Listed as in-network with an insurer and accepting new patients. {note}",
+                      f"Online {plural} in {name} That Take Insurance",
+                      f"{len(ps)} online {plural.lower()} in {name} who take insurance and are accepting new patients, each scored for accuracy.",
+                      ps, fixed_cat=c, extra_links=link_grid("By insurance", sub_links),
+                      faq=[("Does insurance cover online therapy and telehealth visits?", "Many plans cover telehealth with in-network providers, often at the same cost as an office visit. Check your plan's benefits and confirm with the provider before your first session."),
+                           (f"Do online providers have to be licensed in {name}?", f"Generally, yes. A provider usually needs to be licensed where you are during the visit, so confirm they can see patients in {name}.")])
+        links.append((f"Online {plural.lower()}", f"{root}{c}/", f"{len(ps)} accepting"))
+    listing_pages(ctx, root, home,
+                  f"Online care in {name} that takes insurance",
+                  f"Therapists and doctors listed as in-network and accepting new patients who offer telehealth. {note}",
+                  f"Online Therapists & Doctors in {name} That Take Insurance",
+                  f"{len(online)} providers offering online visits in {name}, in-network with an insurer and accepting new patients. Each listing is scored for accuracy.",
+                  online, extra_links=link_grid("By type of care", links))
+    return [(f"All online care in {name}", root, f"{len(online)} accepting")] + links
 
 
 def report_page(ctx, raws, providers):
@@ -713,10 +823,17 @@ def build(raws, site, partners, forms_url, reports, payments):
            "generated": combined["generated"], "sitemap": [], "partners": partners, "forms": forms_url, "payments": payments,
            "cities": [(f"{c}, {st}", path) for c, st, path, _ in cities]}
     guide_pages(ctx)
+    state_paths = defaultdict(set)
+    for city, st, path, _ in cities:
+        state_paths[st].add(path)
+    ctx["tele_states"] = {st for st, paths in state_paths.items()
+                          if sum(1 for p in providers if p["telehealth"] and p["level"] != "none" and paths & set(p["src"])) >= MIN_INDEXABLE}
     city_stats = []
     for city, st, path, r in cities:
         n, hi = build_city(ctx, r, city, st, path, [p for p in providers if path in p["src"]])
         city_stats.append((city, st, path, n, hi))
+
+    state_stats = {st: build_state(ctx, st, paths, providers) for st, paths in state_paths.items()}
 
     # Insurer hubs span every city
     for k in active:
@@ -764,7 +881,7 @@ def build(raws, site, partners, forms_url, reports, payments):
     cat_opts = "".join(f'<option value="{c}">{e(CATS[c][0])}</option>' for c in CATS)
     city_opts = "".join(f'<option value="{path}">{e(city)}, {e(st)}</option>' for city, st, path, *_ in city_stats)
     city_grid = "".join(
-        link_grid(STATE_NAMES.get(state, state), [(f"{city}, {st}", path, f"{n:,} accepting · {hi:,} high confidence") for city, st, path, n, hi in city_stats if st == state])
+        link_grid(STATE_NAMES.get(state, state), [(f"All of {STATE_NAMES.get(state, state)}", f"/{state.lower()}/", f"{state_stats[state][0]:,} accepting · {state_stats[state][1]:,} high confidence")] + [(f"{city}, {st}", path, f"{n:,} accepting · {hi:,} high confidence") for city, st, path, n, hi in city_stats if st == state])
         for state in dict.fromkeys(st for _, st, *_ in city_stats))
     body = f"""<section class="hero">
 <h1>Find a provider who takes your insurance <em>and</em> is actually taking new patients.</h1>

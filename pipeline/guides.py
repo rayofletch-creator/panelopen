@@ -59,6 +59,24 @@ GUIDES = [
         ],
     },
     {
+        "slug": "does-insurance-cover-online-therapy",
+        "title": "Does Insurance Cover Online Therapy? How to Check",
+        "desc": "Many health plans cover online therapy with in-network providers. How to check your plan, what it should cost, and how to find someone who takes your insurance.",
+        "h1": "Does insurance cover online therapy?",
+        "intro": "Often, yes, as long as the therapist is in-network for your plan and licensed where you live. The details depend on your plan, so here's how to check before your first session.",
+        "sections": [
+            ("What usually decides coverage", "<ul class=\"plain\"><li><strong>Your plan.</strong> Coverage and cost-sharing are set per plan, not per insurer.</li><li><strong>The provider's network status.</strong> An online therapist still has to be in-network for your plan to get in-network prices.</li><li><strong>Licensing.</strong> A provider generally needs to be licensed in the state where you are during the session.</li></ul>"),
+            ("How to check your plan", "<p>Call the member services number on your card, or check your member portal, and ask:</p><ul class=\"plain\"><li>Are telehealth mental health visits covered under my plan?</li><li>Is the cost the same as an office visit?</li><li>Is there a deductible to meet first?</li><li>Do I have to use a specific telehealth vendor?</li></ul>"),
+            ("Therapy apps versus in-network therapists", "<p>Some subscription therapy apps don't bill insurance at all, or only work with certain plans. Before you sign up, ask whether the service bills your insurer directly and whether the therapist you'd see is in-network. A therapist who bills your plan directly often costs only your usual copay or coinsurance.</p>"),
+            ("State rules", "<p>Many states, including Colorado and Texas, have laws on telehealth coverage for state-regulated health plans. Self-funded employer plans generally follow federal rules instead, so your HR team or plan documents are the best place to check.</p>"),
+            ("Finding someone online who takes your insurance", "<p>Browse providers listing a telehealth location in <a href=\"/co/telehealth/\">Colorado</a> or <a href=\"/tx/telehealth/\">Texas</a>. Each listing is cross-checked against the federal NPI registry and scored for accuracy. Then use our <a href=\"/guides/questions-to-ask-when-calling-a-provider/\">call script</a> to confirm.</p>"),
+        ],
+        "faq": [
+            ("Is online therapy covered by insurance?", "Many plans cover online therapy with in-network providers, often at the same cost as an office visit. Check your specific plan through member services or your member portal."),
+            ("Can I see an online therapist in another state?", "Usually a therapist must be licensed in the state where you are during the session. Some professions have interstate agreements, so ask the therapist directly."),
+        ],
+    },
+    {
         "slug": "questions-to-ask-when-calling-a-provider",
         "title": "What to Ask When Calling a New Therapist or Doctor",
         "desc": "A short call script for checking network status, new-patient openings, wait times and costs before you book — plus what to write down.",
