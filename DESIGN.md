@@ -1,23 +1,26 @@
 # Now Accepting: design direction
 
-## What the category does
-Reviewed Oct 2026: Grow Therapy, Talkiatry, Alma, SonderMind, Rula, Headway, One Medical, Psychology Today (Zocdoc and Healthgrades blocked automated access).
-Nearly all use a lifestyle photo of a person, a soft serif headline ("...covered by insurance"), search pills and a row of insurer logos. They sell calm and care. None makes accuracy visible.
+## The idea
+On this site, the hospital switchboard, where a lit lamp means someone is there to answer, becomes the directory. Each provider is a lamp, and the lit ones are the ones to call first.
 
-## Our direction
-Own the one thing nobody else shows: is this listing real? Think of a lit "open" sign.
+The live thing is the home switchboard: choose care type, insurance and city, and see one lamp per real provider plus the first three to call.
 
-- **The lamp:** one glowing green signal, used only for "accepting". It's also the logo.
-- **The check meter:** eight pips, one per check, on every listing. This is the site's visual signature.
-- **Night and paper:** deep pine hero against warm paper, instead of the category's photos.
-- **Real data as the image:** the hero shows real listings, not stock people. We have no clinician photos, so listings use monograms.
-- **Type:** Newsreader for headlines, Instrument Sans for interface text. Both are self-hosted under the OFL, so no third-party font requests.
+## How it's built
+- **Direction:** colour chapters and a mosaic masthead (tasteskill, seed 2139240464). Type redrawn from a soft rounded face to League Spartan and Figtree, both self-hosted under the OFL.
+- **Colour:** from a real switchboard: enamel green, bakelite, pine and lamp amber, with hard edges between fields.
+- **Pictures:** real archival photographs, credited on /about/#credits. They show the history of the trade, never our team or a listed provider, and no photo sits next to a provider's name.
+- **Shapes:** square corners, flat fills and tone steps instead of outlines, shadows and rounded cards. Lit lamps on the dark board may glow slightly, because that's what lamps do.
+- **Listings:** banded rows, like a printed directory. No initials badges.
 
 ## Rules that keep providers comfortable
 - The score rates a listing's public data, never quality of care. Say so wherever it could be misread.
 - No red next to a clinician's name. The low level reads "Call to confirm", in neutral grey.
 - Insurer names are plain text. Logos could imply a partnership we don't have.
 - Paying never changes a score, and sponsored placements are labelled.
+
+## What the category does
+Reviewed Oct 2026: Grow Therapy, Talkiatry, Alma, SonderMind, Rula, Headway, One Medical, Psychology Today (Zocdoc and Healthgrades blocked automated access).
+Nearly all use a lifestyle photo of a person, a soft serif headline ("...covered by insurance"), search pills and a row of insurer logos. They sell calm and care. None makes accuracy visible.
 
 ## Evidence
 - First impressions form in about 50ms and carry over to judgments of credibility (Lindgaard et al., 2006): https://www.nature.com/news/2006/060109/full/news060109-13.html

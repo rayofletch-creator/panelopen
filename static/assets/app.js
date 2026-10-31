@@ -45,10 +45,6 @@
     };
     var isActive = function (f) { return !!(f.ins || f.cat || f.zip || f.g || f.tele || f.hi); };
     var phone = function (p) { return "(" + p.slice(0, 3) + ") " + p.slice(3, 6) + "-" + p.slice(6); };
-    var initials = function (name) {
-      var parts = name.match(/[A-Za-z]+/g) || [name];
-      return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : name.slice(0, 2)).toUpperCase();
-    };
     var cardHtml = function (p) {
       var bars = "";
       for (var i = 0; i < 8; i++) bars += '<i class="' + (i < p.k ? "on" : "") + '"></i>';
@@ -56,8 +52,7 @@
       var ins = p.i.map(function (k) { return data.payers[k]; }).join(", ");
       var href = "/provider/" + encodeURIComponent(p.s) + "/";
       var title = p.n + (p.c ? ", " + p.c : "");
-      return '<li class="card"><span class="mono mono-' + (p.d % 5) + '" aria-hidden="true">' + esc(initials(p.n)) + "</span>" +
-        '<div class="card-main"><h2><a href="' + href + '">' + esc(title) + "</a></h2>" +
+      return '<li class="card"><div class="card-main"><h2><a href="' + href + '">' + esc(title) + "</a></h2>" +
         '<p class="card-sub">' + esc(cats) + (p.h ? " · Telehealth" : "") + "</p>" +
         '<p class="card-ins"><span class="lamp" aria-hidden="true"></span><span>Listed as accepting with <strong>' + esc(ins) + "</strong></span></p>" +
         '<div class="card-foot"><span class="score score-' + p.l + '"><span class="pips" role="img" aria-label="' + p.k + ' of 8 checks passed">' + bars + "</span>" + esc(data.levels[p.l]) + "</span>" +
@@ -154,6 +149,70 @@
     form.addEventListener("input", function () { limit = PAGE; apply(); });
     form.addEventListener("submit", function (ev) { ev.preventDefault(); });
     apply();
+  }
+
+  // Home switchboard: one lamp per provider for the chosen care, insurer and city.
+  var boardEl = document.querySelector("[data-board]");
+  if (search && boardEl) {
+    var boardData = null;
+    var fmt = function (n) { return n.toLocaleString(); };
+    var phoneText = function (p) { return p ? "(" + p.slice(0, 3) + ") " + p.slice(3, 6) + "-" + p.slice(6) : "No phone listed"; };
+    var safe = function (s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; };
+    var drawBoard = function () {
+      var f = new FormData(search);
+      var row = boardData.keys[f.get("city") + "|" + f.get("cat") + "|" + (f.get("ins") || "")];
+      if (!row) return;
+      var total = row[0] + row[1] + row[2];
+      var who = boardData.plural[f.get("cat")];
+      var ins = f.get("ins") ? " taking " + boardData.payers[f.get("ins")] : "";
+      boardEl.querySelector("[data-board-title]").textContent = fmt(total) + " " + who.toLowerCase() + " in " + boardData.cities[f.get("city")] + ins + (total === 1 ? " is" : " are") + " listed as accepting";
+      var lamps = boardEl.querySelector("[data-lamps]");
+      var html = "";
+      for (var i = 0; i < total; i++) {
+        var c = i < row[0] ? "h" : i < row[0] + row[1] ? "m" : "l";
+        html += c === "h" ? '<i class="h" style="--n:' + Math.min(i, 120) + '"></i>' : '<i class="' + c + '"></i>';
+      }
+      lamps.classList.remove("on");
+      lamps.innerHTML = html;
+      void lamps.offsetWidth;
+      lamps.classList.add("on");
+      lamps.setAttribute("aria-label", row[0] + " high confidence, " + row[1] + " medium, " + row[2] + " call to confirm");
+      boardEl.querySelector("[data-key-h]").textContent = fmt(row[0]) + " high confidence";
+      boardEl.querySelector("[data-key-m]").textContent = fmt(row[1]) + " medium";
+      boardEl.querySelector("[data-key-l]").textContent = fmt(row[2]) + " call to confirm";
+      boardEl.querySelector("[data-first]").innerHTML = row[3].length ? row[3].map(function (n) {
+        var p = boardData.people[n];
+        return '<li><a href="/provider/' + encodeURIComponent(p[0]) + '/"><strong>' + safe(p[1]) + "</strong><span>" + safe(p[3]) + " · " + phoneText(p[2]) + "</span></a></li>";
+      }).join("") : '<li class="empty-note">No high or medium-confidence listings for this search yet. Try another insurer or a nearby city.</li>';
+      var link = boardEl.querySelector("[data-board-link]");
+      link.href = f.get("city") + f.get("cat") + "/" + (f.get("ins") ? f.get("ins") + "/" : "");
+      link.textContent = "See all " + fmt(total) + " listings";
+      link.hidden = total === 0;
+    };
+    search.addEventListener("change", function () {
+      if (boardData) { drawBoard(); return; }
+      fetch(boardEl.dataset.board).then(function (r) { return r.json(); }).then(function (d) { boardData = d; drawBoard(); }).catch(function () {});
+    });
+  }
+
+  // Parts of a section rise in turn as it enters. Content stays visible without script.
+  document.querySelectorAll("main .links, main .faq, main .glance, main .panel, main .tier, main .values > div, main .cards > .card:nth-child(n+6)").forEach(function (el) {
+    el.classList.add("rise");
+  });
+  var rising = document.querySelectorAll(".rise");
+  if (rising.length && "IntersectionObserver" in window) {
+    var seen = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add("in"); seen.unobserve(en.target); }
+      });
+    }, { rootMargin: "0px 0px -6% 0px" });
+    rising.forEach(function (el) {
+      var sibs = Array.prototype.filter.call(el.parentNode.children, function (c) { return c.classList.contains("rise"); });
+      el.style.setProperty("--i", Math.min(sibs.indexOf(el), 7));
+      seen.observe(el);
+    });
+  } else {
+    rising.forEach(function (el) { el.classList.add("in"); });
   }
 
   // Copy call script.

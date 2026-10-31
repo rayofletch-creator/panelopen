@@ -181,6 +181,11 @@ def merge(raw, reports):
 
 # ------------------------------------------------------------- template ---
 
+READING_PICS = [("nurses-la-junta.jpg", "Nurses at a hospital station in La Junta, Colorado, one holding a telephone"),
+                ("operator-1940.jpg", "A telephone operator connecting a call at a switchboard in 1940"),
+                ("operators.jpg", "Hospital switchboard operators at their console")]
+
+
 def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
     url = ctx["site"] + path
     ld = list(jsonld or [])
@@ -191,6 +196,12 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
     if crumbs:
         parts = [f'<a href="{h}">{e(n)}</a>' for n, h in crumbs[:-1]] + [f'<span aria-current="page">{e(crumbs[-1][0])}</span>']
         crumb_html = '<nav class="crumbs" aria-label="Breadcrumb">' + '<span aria-hidden="true">/</span>'.join(parts) + "</nav>"
+    if '<article class="prose' in body and 'class="side"' not in body:
+        pic, alt = READING_PICS[sum(map(ord, path)) % len(READING_PICS)]
+        body = re.sub(r'(<article class="prose[^"]*">)', lambda m: m.group(1) + f'<aside class="side"><figure><img src="/assets/img/{pic}" alt="{alt}" loading="lazy"></figure><a class="btn btn-lamp" href="/#board">Find who’s accepting</a></aside>', body, count=1)
+    if '<header class="hero-sm">' in body:
+        pic, _ = READING_PICS[sum(map(ord, path.split("page/")[0])) % len(READING_PICS)]
+        body = body.replace('<header class="hero-sm">', f'<header class="hero-sm"><figure class="sm-pic"><img src="/assets/img/{pic}" alt="" width="1200" height="900"></figure>', 1)
     ld_html = "".join(f'<script type="application/ld+json">{json.dumps(x)}</script>' for x in ld)
     doc = f"""<!doctype html>
 <html lang="en">
@@ -212,21 +223,20 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="{ctx['site']}/og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="preload" href="/assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/league-spartan.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/figtree.woff2" as="font" type="font/woff2" crossorigin>
+<script>document.documentElement.className = "js";</script>
 <link rel="stylesheet" href="/assets/site.css">
 {f'<meta name="forms-endpoint" content="{e(ctx["forms"])}">' if ctx["forms"] else ''}
 {ld_html}
 </head>
-<body{' class="dark-top"' if path in ("/", "/for-providers/") else ''}>
+<body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap top-in">
     <a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span>{BRAND}</a>
     <nav class="top-nav" aria-label="Main">
-      <a href="/#cities">Cities</a>
-      <a href="/guides/">Guides</a>
-      <a href="/how-we-verify/">How we verify</a>
+      <span class="top-tab"><a href="/#cities">Cities</a><a href="/guides/">Guides</a><a href="/how-we-verify/">How we verify</a></span>
       <a href="/for-providers/" class="top-cta">For providers</a>
     </nav>
   </div>
@@ -236,16 +246,13 @@ def page(ctx, path, title, desc, body, crumbs=None, jsonld=None, noindex=False):
 {body}
 </main>
 <footer class="foot">
-  <div class="wrap foot-in">
-    <div class="crisis"><strong>In crisis?</strong> Call or text <a href="tel:988">988</a> (Suicide &amp; Crisis Lifeline), or call 911 for an emergency.</div>
-    <div class="foot-cols">
-      <div><p class="foot-brand"><span class="logo-mark" aria-hidden="true"></span>{BRAND}</p><p class="muted">Find in-network providers who are actually taking new patients. Data from insurers' public directories and the federal NPI registry, cross-checked and scored.</p></div>
-      <div><p class="foot-h">Cities</p>{''.join(f'<a href="{path}">{e(name)}</a>' for name, path in ctx["cities"])}</div>
-      <div><p class="foot-h">Insurance</p>{''.join(f'<a href="/insurance/{s}/">{e(ctx["payers"][k])}</a>' for k, s in PAYER_SLUG.items() if k in ctx["active_payers"])}</div>
-      <div><p class="foot-h">{BRAND}</p><a href="/guides/">Guides</a><a href="/how-we-verify/">How we verify</a><a href="/reports/">Directory accuracy reports</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
-    </div>
-    <p class="foot-note small">Listings are informational and not a guarantee of coverage or availability. Always confirm network status with your insurer and the provider before booking. Data last refreshed {fmt_date(ctx["generated"])}.</p>
-  </div>
+  <div class="crisis"><strong>In crisis?</strong> Call or text <a href="tel:988">988</a> (Suicide &amp; Crisis Lifeline), or call 911 for an emergency.</div>
+  <div class="foot-about"><p class="foot-lead">In-network providers, with every listing checked against insurers’ public directories and the federal NPI registry.</p><p class="foot-note">Listings are informational and not a guarantee of coverage or availability. Always confirm network status with your insurer and the provider before booking. Data last refreshed {fmt_date(ctx["generated"])}. <a href="/about/#credits" style="text-decoration:underline">Picture credits</a>.</p></div>
+  <div class="foot-col"><p class="foot-h">Cities</p>{''.join(f'<a href="{path}">{e(name)}</a>' for name, path in ctx["cities"])}</div>
+  <div class="foot-col short"><p class="foot-h">Insurance</p>{''.join(f'<a href="/insurance/{s}/">{e(ctx["payers"][k])}</a>' for k, s in PAYER_SLUG.items() if k in ctx["active_payers"])}</div>
+  <div class="foot-col"><p class="foot-h">{BRAND}</p><a href="/guides/">Guides</a><a href="/how-we-verify/">How we verify</a><a href="/reports/">Directory accuracy reports</a><a href="/for-providers/">Claim your profile</a><a href="/about/">About &amp; disclosures</a><a href="/privacy/">Privacy</a></div>
+  <div class="foot-mark" aria-hidden="true">{BRAND}</div>
+  <a class="foot-go" href="/#board">Find who’s accepting<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" aria-hidden="true"><path d="M10 38 38 10M14 10h24v24"/></svg></a>
 </footer>
 <script src="/assets/app.js" defer></script>
 </body>
@@ -278,12 +285,6 @@ def tidy_address(line):
     return " ".join(w if w in keep or not w[0].isalpha() and not w[-1].isalpha() else (w.capitalize() if w[0].isalpha() else w.lower()) for w in line.split())
 
 
-def monogram(name, npi, cls=""):
-    parts = re.findall(r"[A-Za-z]+", name)
-    initials = (parts[0][0] + parts[-1][0] if len(parts) > 1 else name[:2]).upper()
-    return f'<span class="mono mono-{int(npi) % 5}{cls}" aria-hidden="true">{e(initials)}</span>'
-
-
 def pips(score, total=8, cls=""):
     bars = "".join(f'<i class="{"on" if i < score else ""}"></i>' for i in range(total))
     return f'<span class="pips{cls}" role="img" aria-label="{score} of {total} checks passed">{bars}</span>'
@@ -295,12 +296,12 @@ def score_tag(p):
 
 def provider_sample():
     """An obviously generic preview of a claimed profile; no real provider implied."""
-    return f"""<aside class="sample" aria-label="Example of a claimed profile">
+    return f"""<aside class="sample" data-ui aria-label="Example of a claimed profile">
 <p class="sample-tag">Example profile</p>
-<div class="sample-head"><span class="mono mono-0" aria-hidden="true">YN</span><div><p class="sample-name">Your Name, LCSW</p><p class="muted" style="margin:0">Therapist · Your city</p></div></div>
+<p class="sample-name">Your Name, LCSW</p>
+<p class="muted">Therapist · Your city</p>
 <p class="status"><span class="lamp" aria-hidden="true"></span>Accepting new patients</p>
-<p>{pips(7)} <span class="score score-high">High confidence</span></p>
-<span class="confirmed">Confirmed by provider</span>
+<p>{pips(7)} <span class="score score-high">High confidence</span> <span class="confirmed">Confirmed by provider</span></p>
 <span class="btn" aria-hidden="true">Book or call</span>
 </aside>"""
 
@@ -318,7 +319,6 @@ def card(ctx, p):
     phone = f'<a class="btn btn-call" href="tel:+1{p["phone"]}">Call {fmt_phone(p["phone"])}</a>' if p["phone"] else ""
     cats = ", ".join(CATS[c][1].capitalize() for c in p["cats"])
     return f"""<li class="card" {attrs}>
-  {monogram(p['name'], p['npi'])}
   <div class="card-main">
     <h2><a href="/provider/{p['slug']}/">{e(p['name'])}{', ' + e(p['credential']) if p['credential'] else ''}</a></h2>
     <p class="card-sub">{e(cats)}{' · Telehealth' if p['telehealth'] else ''}</p>
@@ -426,6 +426,47 @@ def list_scope(ctx, base_path):
     return " ".join(attrs)
 
 
+def lamp_html(row):
+    hi, med, low = row[:3]
+    return "".join(f'<i class="{c}" style="--n:{min(i, 120)}"></i>' if c == "h" else f'<i class="{c}"></i>' for i, c in enumerate(["h"] * hi + ["m"] * med + ["l"] * low))
+
+
+def first_calls_html(board, row):
+    items = ""
+    for i in row[3]:
+        slug, name, phone, kind = board["people"][i]
+        items += f'<li><a href="/provider/{e(slug)}/"><strong>{e(name)}</strong><span>{e(kind)} · {fmt_phone(phone) if phone else "No phone listed"}</span></a></li>'
+    return items
+
+
+def write_board_data(ctx, providers):
+    """Counts and first three calls for every city x care type x insurer, for the home switchboard."""
+    listed = [p for p in providers if p["level"] != "none"]
+    people, index, keys = [], {}, {}
+    for name, path in ctx["cities"]:
+        in_city = [p for p in listed if path in p["src"]]
+        for c in CATS:
+            in_cat = [p for p in in_city if c in p["cats"]]
+            for k in [""] + list(ctx["active_payers"]):
+                ps = [p for p in in_cat if not k or k in p["accepting_payers"]]
+                counts = [sum(1 for p in ps if p["level"] == lv) for lv in ("high", "medium", "low")]
+                top = []
+                for p in [q for q in ps if q["phone"] and q["level"] in ("high", "medium")][:3]:
+                    if p["npi"] not in index:
+                        index[p["npi"]] = len(people)
+                        full = p["name"] + (", " + p["credential"] if p["credential"] else "")
+                        people.append([p["slug"], full, p["phone"], CATS[p["cats"][0]][1].capitalize()])
+                    top.append(index[p["npi"]])
+                keys[f"{path}|{c}|{PAYER_SLUG[k] if k else ''}"] = counts + [top]
+    board = {"people": people, "keys": keys, "plural": {c: v[0] for c, v in CATS.items()},
+             "cities": {path: name.split(",")[0] for name, path in ctx["cities"]},
+             "payers": {PAYER_SLUG[k]: ctx["payers"][k] for k in ctx["active_payers"]}}
+    os.makedirs(os.path.join(DIST, "data"), exist_ok=True)
+    with open(os.path.join(DIST, "data", "board.json"), "w") as f:
+        json.dump(board, f, separators=(",", ":"))
+    return board
+
+
 def write_search_data(ctx, providers):
     """Compact listings per state, loaded only when someone filters a long list."""
     slug_of = PAYER_SLUG
@@ -505,7 +546,7 @@ def provider_page(ctx, p, city_path, city, peers=()):
         status = {"yes": ("Accepting new patients", "ok"), "no": ("Not accepting new patients", "no"), "unknown": ("Not stated", "unk")}[pl["accepting"]]
         nets = ", ".join(pl["networks"][:6]) + (f" +{len(pl['networks']) - 6} more" if len(pl["networks"]) > 6 else "")
         rows += f'<tr><th scope="row"><a href="/insurance/{PAYER_SLUG[k]}/">{e(ctx["payers"][k])}</a></th><td data-label="New patients"><span class="pill pill-{status[1]}">{status[0]}</span></td><td class="muted" data-label="Networks / plans">{e(nets.title()) or "—"}</td><td class="muted" data-label="Insurer updated">{fmt_date(pl["updated"])}</td></tr>'
-    checks = "".join(f'<li class="{"ok" if ok else "no"}"><span aria-hidden="true">{"✓" if ok else "–"}</span> {e(label)}</li>' for ok, label in p["checks"])
+    checks = "".join(f'<li class="{"ok" if ok else "no"}"><i aria-hidden="true"></i><span class="vh">{"Passed: " if ok else "Not passed: "}</span> {e(label)}</li>' for ok, label in p["checks"])
     locs = "".join(f'<li>{"Telehealth / virtual visits" if l["virtual"] else e(tidy_address(l["line"])) + ", " + e(l["city"]) + ", " + e(l["state"]) + " " + e(l["zip"])}</li>' for l in p["locations"][:8])
     full = p["name"] + (", " + p["credential"] if p["credential"] else "")
     phys = any(c in ("psychiatrist", "primary-care", "pediatrician") for c in p["cats"]) and p["credential"] in ("MD", "DO")
@@ -528,7 +569,6 @@ def provider_page(ctx, p, city_path, city, peers=()):
     body = f"""<article class="prov">
 <header class="prov-head">
   <div class="prov-id">
-    {monogram(p['name'], p['npi'], ' mono-lg')}
     <div>
     <h1>{e(full)}</h1>
     <p class="lede">{e(cats.capitalize())} in {e(city)}{' · Offers telehealth' if p['telehealth'] else ''}{' · ' + e(p['gender']) if p['gender'] else ''}</p>
@@ -600,30 +640,30 @@ def static_pages(ctx, city_path, city):
          [("Home", "/"), ("How we verify", "/how-we-verify/")])
     page(ctx, "/for-providers/", f"For Providers: Claim Your Profile | {BRAND}",
          "Stop fielding calls when your panel is full. Claim your free profile, confirm availability and add a booking link.",
-         f"""<section class="bleed prov-hero on-night"><div class="wrap prov-hero-in">
-<div><p class="eyebrow"><span class="lamp lamp-glow" aria-hidden="true"></span>For therapists, doctors and practices</p>
-<h1>Your name is already in the directories. <em>Make sure it’s right.</em></h1>
-<p class="lede">Insurer directories can say you're open when you're full, or hide you when you have room. Claim your free profile and show patients your real availability.</p>
-<div class="band-actions"><a class="btn btn-lamp btn-lg" href="?plan=free#claim">Claim your free profile</a><a class="btn btn-line btn-lg" href="#plans">See plans</a></div></div>
-{provider_sample()}
+         f"""<section class="bleed prov-hero"><div class="prov-hero-in">
+<div class="prov-hero-copy">
+<h1>Your name is already in the directories.</h1>
+<p class="lede">They can say you’re open when you’re full, or hide you when you have room. Claim your free profile and show patients your real availability.</p>
+<div class="band-actions"><a class="btn btn-lg" href="?plan=free#claim">Claim your free profile</a><a class="btn btn-lamp btn-lg" href="#plans">See plans</a></div></div>
+<div class="prov-hero-pic"><img src="/assets/img/operators.jpg" alt="Hospital switchboard operators at their console" width="1100" height="1627" fetchpriority="high">{provider_sample()}</div>
 </div></section>
-<section class="sec" style="padding-top:64px">
-<div class="sec-head"><h2>A listing you’d be glad to share.</h2><p>Built to respect your time and your name.</p></div>
+<section class="chapter" style="padding-top:clamp(56px,7vw,96px)">
+<div class="sec-head rise"><h2>A listing you’d be glad to share</h2><p>Built to respect your time and your name.</p></div>
 <div class="values">
-<div><h3>Fewer calls you can't take</h3><p>When you confirm you're full, patients can see that before they pick up the phone. When you have openings, they can see that too.</p></div>
-<div><h3>You control your status</h3><p>Claim your listing, correct what's out of date and mark it provider-confirmed. No insurer portal, fax or form for each plan.</p></div>
-<div><h3>A score you can trust</h3><p>Our checks rate a listing's public data, never your quality of care. Paying doesn't change your score, and any sponsored placement is labelled.</p></div>
+<div class="rise"><h3>Fewer calls you can’t take</h3><p>When you confirm you’re full, patients can see that before they pick up the phone. When you have openings, they can see that too.</p></div>
+<div class="rise"><h3>Your status, in your hands</h3><p>Claim your listing, correct what’s out of date and mark it provider-confirmed, without an insurer portal or a form for each plan.</p></div>
+<div class="rise"><h3>A score you can trust</h3><p>Our checks rate a listing’s public data, never your quality of care. Paying doesn’t change your score, and any sponsored placement is labelled.</p></div>
 </div>
-<p class="source-note">Keeping directories current is a real cost: in a <a href="https://www.prnewswire.com/news-releases/caqh-survey-maintaining-provider-directories-costs-us-physician-practices-2-76-billion-annually-300957624.html" rel="nofollow noopener" target="_blank">2019 CAQH survey</a>, practices reported spending about $1,000 a month on it. A Now Accepting profile doesn't update your insurers' directories, but it gives patients one accurate place to check.</p>
+<p class="source-note">Keeping directories current is a real cost: in a <a href="https://www.prnewswire.com/news-releases/caqh-survey-maintaining-provider-directories-costs-us-physician-practices-2-76-billion-annually-300957624.html" rel="nofollow noopener" target="_blank">2019 CAQH survey</a>, practices reported spending about $1,000 a month on it. A Now Accepting profile doesn’t update your insurers’ directories, but it gives patients one accurate place to check.</p>
 </section>
-<section class="sec" id="plans"><div class="sec-head"><h2>Plans</h2><p>Claiming and correcting your listing is free. Paid plans add booking links, insights and tools for groups.</p></div>
+<section class="chapter" id="plans"><div class="sec-head rise"><h2>Plans</h2><p>Claiming and correcting your listing is free. Paid plans add booking links, insights and tools for groups.</p></div>
 <div class="tiers">
 <div class="tier"><h2>Free</h2><p class="price">$0</p><ul><li>Claim and correct your listing</li><li>Toggle "accepting new patients"</li><li>Shown as provider-confirmed</li></ul><a class="btn btn-ghost" href="?plan=free#claim">Claim free</a></div>
-<div class="tier tier-main"><p class="tag">Most popular</p><h2>Practice Pro</h2><p class="price">$39<span>/mo</span></p><ul><li>Everything in Free</li><li>Online booking or intake link</li><li>Weekly opening counts & waitlist</li><li>Patient call analytics</li><li>Directory-error alerts across insurers</li></ul>""" + pay_button(ctx, "pro", "Start 30-day trial", "btn") + """</div>
+<div class="tier tier-main"><h2>Practice Pro</h2><p class="price">$39<span>/mo</span></p><p class="tag" style="margin:10px 0 0">Most popular</p><ul><li>Everything in Free</li><li>Online booking or intake link</li><li>Weekly opening counts & waitlist</li><li>Patient call analytics</li><li>Directory-error alerts across insurers</li></ul>""" + pay_button(ctx, "pro", "Start 30-day trial", "btn") + """</div>
 <div class="tier"><h2>Group</h2><p class="price">$149<span>/mo</span></p><ul><li>Up to 15 clinicians</li><li>Group page & intake routing</li><li>Bulk availability updates</li><li>Labelled featured placement</li></ul>""" + pay_button(ctx, "group", "Subscribe", "btn btn-ghost") + """</div>
 </div>
 """ + (f'<p class="muted small">Already subscribed? <a href="{e(ctx["payments"]["portal"])}" rel="noopener">Manage your plan or cancel</a>.</p>' if ctx["payments"].get("portal") else "") + """</section>
-<section class="panel" id="claim"><h2>Claim your profile</h2><form class="stack" data-form><input type="hidden" name="kind" value="claim"><input type="hidden" name="plan" data-plan value="free"><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div><label>NPI number<input name="npi" inputmode="numeric" maxlength="10" required></label><label>Work email<input type="email" name="email" required></label><button class="btn" type="submit">Send verification</button><p class="muted small" data-form-msg>We verify ownership by contacting the phone or email on your NPI record.</p></form></section>""",
+<section class="panel claim-panel" id="claim"><div><h2>Claim your profile</h2><form class="stack" data-form><input type="hidden" name="kind" value="claim"><input type="hidden" name="plan" data-plan value="free"><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div><label>NPI number<input name="npi" inputmode="numeric" maxlength="10" required></label><label>Work email<input type="email" name="email" required></label><button class="btn" type="submit">Send verification</button><p class="muted small" data-form-msg>We verify ownership by contacting the phone or email on your NPI record.</p></form></div><figure><img src="/assets/img/nurses-la-junta.jpg" alt="Two nurses at a hospital station in La Junta, Colorado, one holding a telephone" loading="lazy" width="1200" height="919"></figure></section>""",
          [("Home", "/"), ("For providers", "/for-providers/")])
     snippet = lambda v: e(f'<a href="{ctx["site"]}/"><img src="{ctx["site"]}/assets/badge-{v}.svg" alt="Find us on Now Accepting" width="200" height="56"></a>')
     page(ctx, "/for-providers/badge/", f"Add a Now Accepting Badge to Your Website | {BRAND}",
@@ -668,7 +708,14 @@ def static_pages(ctx, city_path, city):
 <li><strong>Data partnerships.</strong> We sell aggregated directory-accuracy reports to employers, brokers and researchers. We never sell anything about you.</li></ul>
 <h2>Where the data comes from</h2><p>Listings come from the provider directories insurers are required to publish, checked against the federal NPI registry. Every listing is scored using <a href="/how-we-verify/">published criteria</a>. We don't call every provider, so a high score means a listing's public records hold up, not that an appointment is guaranteed.</p>
 <h2>Corrections</h2><p>Found something wrong? <a href="/report/">Tell us what happened when you called</a>. Providers can <a href="/for-providers/">claim and correct their listing</a> for free.</p>
-<h2>Not medical advice</h2><p>Listings are informational. Always confirm coverage with your insurer.</p></article>""",
+<h2>Not medical advice</h2><p>Listings are informational. Always confirm coverage with your insurer. If you're in crisis, call or text 988, or call 911 in an emergency.</p>
+<h2 id="credits">Picture credits</h2><p>Our pictures show the history of hospital switchboards, not our team or any listed provider.</p><ul class="credits">
+<li><a href="https://commons.wikimedia.org/wiki/File:Clinical_Center_telephone_switchboard_operators_(14172771998).jpg" rel="nofollow noopener">Clinical Center telephone switchboard operators</a>, NIH History Office, public domain.</li>
+<li><a href="https://commons.wikimedia.org/wiki/File:23_Nurses_station_La_Junta_CO_(24648176136).jpg" rel="nofollow noopener">Nurses station, La Junta, Colorado</a>, Mennonite Church USA Archives, no known copyright restrictions.</li>
+<li><a href="https://commons.wikimedia.org/wiki/File:Telephone_operators_in_Minneapolis_(1940_INP_press_photo).jpg" rel="nofollow noopener">Telephone operators in Minneapolis, 1940</a>, International News Photos, public domain.</li>
+<li><a href="https://commons.wikimedia.org/wiki/File:Switchboard_Operator_Connecting_Doctor_and_Hospital_(530737940).jpg" rel="nofollow noopener">Switchboard Operator Connecting Doctor and Hospital</a>, Sandra Cohen-Rose and Colin Rose, <a href="https://creativecommons.org/licenses/by/2.0/" rel="nofollow noopener">CC BY 2.0</a>, cropped.</li>
+<li><a href="https://commons.wikimedia.org/wiki/File:Orion_%26_Oriola_switchboard_Elisa_Telephone_Museum.jpg" rel="nofollow noopener">Orion &amp; Oriola switchboard, Elisa Telephone Museum</a>, Antti Leppänen, <a href="https://creativecommons.org/licenses/by/4.0/" rel="nofollow noopener">CC BY 4.0</a>, cropped.</li>
+</ul></article>""",
          [("Home", "/"), ("About", "/about/")])
     page(ctx, "/privacy/", f"Privacy | {BRAND}", f"{BRAND} doesn't use ad trackers, retargeting pixels or sell personal data. Searching for care stays private: no account, no health information collected.",
          """<article class="prose"><h1>Privacy</h1><p class="lede">Searching for mental health care is sensitive. We built this site so nothing about your search leaves it.</p>
@@ -860,7 +907,7 @@ def report_page(ctx, raws, providers):
     headline = f"We checked {n:,} {region} provider listings against the federal registry"
     lede = (f"Insurers are legally required to publish who is in-network and accepting new patients. We pulled those public directories for {e(cities)} "
             f"and cross-checked every provider against the federal NPI registry. Only <strong>{pct(lv['high'], n)}</strong> of providers passed enough checks to earn high confidence.")
-    body = f"""<article class="prose report"><p class="tag">Data report · {fmt_date(ctx['generated'])}</p><h1>{e(headline)}</h1>
+    body = f"""<article class="prose report"><h1>{e(headline)}</h1><p class="tag">Data report · {fmt_date(ctx['generated'])}</p>
 <p class="lede">{lede}</p>
 <h2>Key findings</h2><ul>
 <li><strong>{pct(lv['high'], n)}</strong> of {n:,} providers earned high confidence; <strong>{pct(lv['low'] + lv['none'], n)}</strong> were low confidence or not accepting.</li>
@@ -903,7 +950,7 @@ def guide_pages(ctx):
         path = f"/guides/{g['slug']}/"
         faq_html, faq_ld = faq_block(g["faq"])
         others = "".join(f'<li><a href="{p}">{e(t)}</a></li>' for t, p in GUIDE_LINKS if p != path)
-        body = f"""<article class="prose report"><p class="tag">Guide · updated {fmt_date(ctx['generated'])}</p><h1>{e(g['h1'])}</h1>
+        body = f"""<article class="prose report"><h1>{e(g['h1'])}</h1><p class="tag">Guide · updated {fmt_date(ctx['generated'])}</p>
 <p class="lede">{g['intro']}</p>
 {''.join(f'<h2>{e(h)}</h2>{html_}' for h, html_ in g['sections'])}
 </article>
@@ -998,78 +1045,91 @@ def build(raws, site, partners, forms_url, reports, payments):
     city_grid = "".join(
         link_grid(STATE_NAMES.get(state, state), [(f"All of {STATE_NAMES.get(state, state)}", f"/{state.lower()}/", f"{state_stats[state][0]:,} accepting · {state_stats[state][1]:,} high confidence")] + [(f"{city}, {st}", path, f"{n:,} accepting · {hi:,} high confidence") for city, st, path, n, hi in city_stats if st == state])
         for state in dict.fromkeys(st for _, st, *_ in city_stats))
-    board_rows = ""
-    seen = set()
-    for want in ("therapist", "psychiatrist", "primary-care", "pediatrician"):
-        pick = next((p for p in listed if p["level"] == "high" and want == p["cats"][0] and p["phone"] and p["src"][0] not in seen
-                     and any(not l["virtual"] for l in p["locations"])), None)
-        if pick:
-            seen.add(pick["src"][0])
-            where = next(c for c, _, path, _ in cities if path == pick["src"][0])
-            full_name = pick["name"] + (", " + pick["credential"] if pick["credential"] else "")
-            board_rows += (f'<li><a href="/provider/{pick["slug"]}/">{monogram(pick["name"], pick["npi"])}<strong>{e(full_name)}</strong>'
-                           f'<small>{e(CATS[want][1].capitalize())} · {e(where)} {pips(pick["score"], len(pick["checks"]))}</small></a></li>')
-    uhc = [p["plans"]["uhc"]["accepting"] == "yes" for p in providers if "uhc" in p["plans"]]
-    uhc_share = round(100 * sum(uhc) / len(uhc)) if uhc else 0
-    insurer_names = [first["payers"][k] for k in active]
     state_count = len({st for _, st, *_ in city_stats})
-    body = f"""<section class="bleed on-night home-hero"><div class="wrap hero-in">
-<div>
-<p class="eyebrow"><span class="lamp lamp-glow" aria-hidden="true"></span>Insurer directories, fact-checked</p>
-<h1>In-network care that’s <em>actually taking new patients.</em></h1>
-<p class="lede">Insurer directories are often wrong, and you find out one phone call at a time. We check every listing against federal records and show you who to call first.</p>
-<form class="search" action="{cities[0][2]}" data-search>
+    uhc = [p["plans"]["uhc"]["accepting"] == "yes" for p in providers if "uhc" in p["plans"]]
+    insurer_tiles = ""
+    for k in active:
+        flags = [p["plans"][k]["accepting"] == "yes" for p in providers if k in p["plans"]]
+        if flags:
+            insurer_tiles += f'<div class="tile rise"><strong>{round(100 * sum(flags) / len(flags))}%</strong><span>of {e(first["payers"][k])} listings we pulled are marked as accepting new patients</span></div>'
+    board = write_board_data(ctx, providers)
+    start = board["keys"][f"{cities[0][2]}|therapist|"]
+    start_n = sum(start[:3])
+    agenda = ""
+    for state in dict.fromkeys(st for _, st, *_ in city_stats):
+        rows = "".join(f'<li><a href="{path}"><b>{e(city)}</b><span>{n:,} accepting</span><span>{hi:,} high confidence</span></a></li>' for city, st, path, n, hi in city_stats if st == state)
+        agenda += (f'<div class="agenda rise"><a class="agenda-state" href="/{state.lower()}/">{e(STATE_NAMES.get(state, state))}<small>{state_stats[state][0]:,} accepting</small></a><ul>{rows}</ul></div>')
+    checks_html = "".join(f'<li class="rise"><strong><span class="lamp" aria-hidden="true"></span>{n}</strong><span>{d}</span></li>' for n, d in [
+        ("Marked accepting", "An insurer lists them as taking new patients"), ("Recently updated", "The insurer changed the record in the last 90 days"),
+        ("Active NPI", "Active in the federal provider registry"), ("Office matches", "The ZIP code matches federal records"),
+        ("Phone matches", "The phone number matches federal records"), ("More than one insurer", "A second insurer lists them too"),
+        ("No conflicts", "Insurers don't contradict each other"), ("Patient reports", "Recent callers confirm there are openings")])
+    guides_html = "".join(f'<li class="rise"><a href="{p}">{e(t)}</a></li>' for t, p in GUIDE_LINKS)
+    body = f"""<section class="bleed mosaic" aria-label="Now Accepting at a glance">
+<figure class="m-a"><img src="/assets/img/operators.jpg" alt="Hospital switchboard operators wearing headsets at a long console" width="1100" height="1627" fetchpriority="high"></figure>
+<div class="m-b tile-fact"><strong>{accepting:,}</strong><span>providers listed as accepting</span></div>
+<figure class="m-c"><img src="/assets/img/operator-1940.jpg" alt="A telephone operator connecting a call at a switchboard in 1940" width="900" height="1193"></figure>
+<div class="m-d tile-fact"><strong>{hi_total:,}</strong><span>high-confidence listings</span></div>
+<figure class="m-e"><img src="/assets/img/panel.jpg" alt="Rows of keys and a rotary dial on an enamel switchboard panel" width="1050" height="300"></figure>
+<div class="m-f tile-fact"><strong>{len(cities)}</strong><span>cities in {state_count} states</span></div>
+<figure class="m-g"><img src="/assets/img/nurses-la-junta.jpg" alt="Two nurses at a hospital nurses' station in La Junta, Colorado, one holding a telephone" width="1200" height="919"></figure>
+<figure class="m-h"><img src="/assets/img/relief.jpg" alt="Stone carving of a switchboard operator connecting a doctor's call" width="1000" height="1000"></figure>
+</section>
+<section class="axis">
+<p class="axis-note">In-network therapists and doctors, with every insurer listing checked against federal records.</p>
+<div class="axis-title"><h1 class="home-title"><span class="line"><span>Who’s taking</span></span><span class="line"><span>new patients?</span></span></h1>
+<form class="search axis-search" action="{cities[0][2]}" data-search>
   <label><span>I need a</span><select name="cat">{cat_opts}</select></label>
   <label><span>My insurance</span><select name="ins"><option value="">Any insurance</option>{ins_opts}</select></label>
   <label><span>Near</span><select name="city">{city_opts}</select></label>
   <button class="btn btn-lamp btn-lg" type="submit">Find openings</button>
-</form>
-<p class="search-note">Free to search, no account needed. Refreshed {fmt_date(ctx['generated'])}.</p>
+</form></div>
+</section>
+<section class="bleed switch" id="board" data-board="{ctx['base']}/data/board.json"><div class="wrap switch-in">
+<div>
+<h2 data-board-title>{start_n:,} therapists in {e(cities[0][0])} are listed as accepting</h2>
+<p class="switch-note">Each lamp is one provider. The brighter the lamp, the more of our checks the listing passed.</p>
+<div class="lamps on" data-lamps role="img" aria-label="{start[0]} high confidence, {start[1]} medium, {start[2]} call to confirm">{lamp_html(start)}</div>
+<ul class="lamp-key"><li><i style="background:var(--lamp)"></i><span data-key-h>{start[0]:,} high confidence</span></li><li><i style="background:var(--lamp-dim)"></i><span data-key-m>{start[1]:,} medium</span></li><li><i style="background:var(--lamp-off)"></i><span data-key-l>{start[2]:,} call to confirm</span></li></ul>
 </div>
-<aside class="board" aria-label="Sample of current listings">
-<div class="board-head"><span><span class="lamp lamp-glow" aria-hidden="true"></span>Listed as accepting</span><span>Checks passed</span></div>
-<ul>{board_rows}</ul>
-<p class="board-foot">A sample of high-confidence listings. Always confirm with the office when you call.</p>
-</aside>
+<div class="first-calls">
+<h3>Call these first</h3>
+<ol data-first>{first_calls_html(board, start)}</ol>
+<a class="btn btn-lamp btn-lg" data-board-link href="{cities[0][2]}therapist/">See all {start_n:,} listings</a>
+</div>
 </div></section>
-<section class="bleed strip"><div class="wrap"><ul>
-<li><strong>{accepting:,}</strong><span>providers listed as accepting</span></li>
-<li><strong>{hi_total:,}</strong><span>high-confidence listings</span></li>
-<li><strong>{len(cities)}</strong><span>cities in {state_count} {'state' if state_count == 1 else 'states'}</span></li>
-<li><strong>{len(insurer_names)}</strong><span>insurer directories: {e(', '.join(insurer_names))}</span></li>
-</ul></div></section>
-<section class="sec">
-<div class="sec-head"><h2>“Accepting new patients” doesn’t always mean what it says.</h2><p>Insurers have to publish who's in their networks. Nobody makes those lists easy to trust, so we check them.</p></div>
-<div class="facts">
-<div><strong>80%</strong><p>of the mental health listings checked in a U.S. Senate secret-shopper study of Medicare Advantage directories were inaccurate or unreachable.</p><p>Senate Finance Committee, 2023</p></div>
-<div><strong>{uhc_share}%</strong><p>of the UnitedHealthcare listings we pulled are marked as accepting new patients, so that flag alone can't tell an open practice from a full one.</p><p><a href="{report_url}">Our directory data</a></p></div>
-<div><strong>8</strong><p>checks on every listing, using public records. A mismatch isn't always an error, so the score tells you where to be careful and who to call first.</p><p><a href="/how-we-verify/">How we verify</a></p></div>
+<section class="chapter">
+<div class="tiles">
+<div class="tile tile-head rise"><h2>“Accepting” is a flag, and flags go stale.</h2><span>Insurers publish who’s in their networks. Here’s how often each one marks a provider as open.</span></div>
+{insurer_tiles}
+<figure class="tile tile-pic rise" style="margin:0"><img src="/assets/img/panel.jpg" alt="" loading="lazy" width="1050" height="300"></figure>
+<div class="tile tile-wide rise"><strong>80%</strong><span>of the mental health listings checked in a 2023 U.S. Senate secret-shopper study of Medicare Advantage directories were inaccurate or unreachable.</span></div>
 </div></section>
-<section class="sec">
-<div class="anatomy">
-<div class="anatomy-top"><div><p class="eyebrow">The listing check</p><h2 class="display" style="font-size:clamp(1.7rem,3vw,2.4rem);font-weight:440;margin:0">Eight checks. One clear signal.</h2></div>{pips(8, 8, ' pips-lg')}</div>
-<ol>
-<li><strong>Marked accepting</strong><span>An insurer lists them as taking new patients</span></li>
-<li><strong>Recently updated</strong><span>The insurer's record changed in the last 90 days</span></li>
-<li><strong>Active NPI</strong><span>Active in the federal provider registry</span></li>
-<li><strong>Office matches</strong><span>The ZIP code matches federal records</span></li>
-<li><strong>Phone matches</strong><span>The phone number matches federal records</span></li>
-<li><strong>Multiple insurers</strong><span>More than one insurer lists them</span></li>
-<li><strong>No conflicts</strong><span>Insurers don't contradict each other</span></li>
-<li><strong>Patient reports</strong><span>Recent callers confirm there are openings</span></li>
-</ol></div></section>
-<section class="sec cities" id="cities">
-<div class="sec-head"><h2>Search by city</h2></div>
-{city_grid}</section>
-<section class="sec">
-<div class="sec-head"><h2>Before you call</h2></div>
-{link_grid("", [(t, p, "") for t, p in GUIDE_LINKS])}</section>
-<section class="bleed on-night band band-last"><div class="wrap band-in">
-<div><h2>Are you a provider? Your listing should reflect your real availability.</h2>
-<p>Claim your profile for free, confirm whether you're taking patients and correct anything that's out of date. Paying never changes a confidence score.</p>
-<div class="band-actions"><a class="btn btn-lamp btn-lg" href="/for-providers/">See how it works</a><a class="btn btn-line btn-lg" href="{report_url}">Read the data</a></div></div>
-{provider_sample()}
-</div></section>"""
+<section class="bleed split chapter" style="padding-bottom:0">
+<div class="panel-a"><figure><img src="/assets/img/nurses-la-junta.jpg" alt="A nurse in La Junta, Colorado, holding a telephone receiver" loading="lazy" width="1200" height="919"></figure>
+<h2 class="rise">What a directory tells you</h2><ul class="rise"><li>A name and a phone number</li><li>Which networks they’re in</li><li>A yes or no on new patients</li></ul><p class="note rise">You find out whether any of it holds up when you call.</p></div>
+<div class="panel-b"><figure><img src="/assets/img/operator-1940.jpg" alt="An operator reaching across a switchboard to connect a line" loading="lazy" width="900" height="1193"></figure>
+<h2 class="rise">What we add before you call</h2><ul class="rise"><li>Whether the federal record agrees</li><li>Whether insurers agree with each other</li><li>What other callers found</li></ul><p class="note rise"><a href="/how-we-verify/">How we score every listing</a></p></div>
+</section>
+<section class="chapter">
+<h2 class="grow-head rise">From a stale list to your first call</h2>
+<p class="grow-lede rise">Most of the work happens before you pick up the phone.</p>
+<div class="grow">
+<div class="g1 rise"><figure><img src="/assets/img/panel.jpg" alt="Enamel switchboard panel with rows of keys" loading="lazy" width="1050" height="300"></figure><h3>Pulled</h3><p>Federal rules make insurers publish their directories as open data, so we collect them every week.</p></div>
+<div class="g2 rise"><figure><img src="/assets/img/relief.jpg" alt="Stone carving of an operator connecting a doctor's call" loading="lazy" width="1000" height="1000"></figure><h3>Checked</h3><p>Each provider is matched by NPI against the federal registry, then scored on eight checks.</p></div>
+<div class="g3 rise"><figure><img src="/assets/img/operators.jpg" alt="Hospital switchboard operators at their console" loading="lazy" width="1100" height="1627"></figure><h3>Connected</h3><p>You call the likeliest first. Tell us what happened, and the next person gets better data.</p></div>
+</div>
+<ul class="checklist">{checks_html}</ul>
+<p class="source-note">These checks compare public records rather than phone calls. A mismatch isn’t always an error, because many providers work from several offices. <a href="{report_url}">Read our accuracy reports</a>.</p>
+</section>
+<section class="chapter" id="cities">
+<div class="agenda-head rise"><h2><span>Every city we cover,</span>with who’s accepting.</h2></div>
+{agenda}</section>
+<section class="chapter reading-row">
+<figure class="rise"><img src="/assets/img/nurses-la-junta.jpg" alt="A nurse at a hospital station in La Junta, Colorado" loading="lazy" width="1200" height="919" style="object-position:8% 40%"></figure>
+<div><h2 class="rise">Before you call</h2><p class="rise">A two-minute call goes better with the right questions.</p><ul class="guide-list">{guides_html}</ul></div>
+</section>
+<a class="bleed word-band" href="/for-providers/"><img class="band-pic" src="/assets/img/operator-1940.jpg" alt="" loading="lazy" width="900" height="1193"><p>Are you a provider? Confirm whether you’re taking patients and correct your listing for free.</p><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="5" aria-hidden="true"><path d="M10 38 38 10M14 10h24v24"/></svg><h2>Claim it</h2></a>"""
     page(ctx, "/", "Find In-Network Therapists & Doctors Accepting New Patients",
          "Find therapists, psychiatrists and doctors who take your insurance and are actually accepting new patients. Every listing cross-checked and scored for accuracy.",
          body, jsonld=[{"@context": "https://schema.org", "@type": "WebSite", "name": BRAND, "url": ctx["site"] + "/"},
