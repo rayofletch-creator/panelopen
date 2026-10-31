@@ -57,7 +57,8 @@ so links from credible sites matter more than anything else on this list.
 
 Lead with the data report. It's original, local and newsworthy.
 
-**Local press (best links).** Pitch the report to health and consumer reporters at:
+**Local press (best links).** Current drafts live in outreach/pitches.md (local only,
+not in the repo). Pitch the report to health and consumer reporters at:
 Denver Post, Colorado Sun, Denverite, CPR News, Axios Denver, 9News, Denver7,
 Colorado Springs Gazette, Boulder Daily Camera, Coloradoan (Fort Collins).
 
@@ -82,7 +83,8 @@ r/mentalhealth, r/HealthInsurance. Search each for "in-network therapist" and
 "accepting new patients".
 
 **Providers.** Every claimed profile is a reason for a practice to link "Find us
-on Now Accepting". Add a small badge for their website once claims start.
+on Now Accepting". Badge page: /for-providers/badge/ (linked from every profile; free,
+no effect on score or ranking).
 
 **Directories and tool lists.** Product Hunt launch; submit to health-tech
 resource lists; Hacker News "Show HN" (the open-data angle does well there).

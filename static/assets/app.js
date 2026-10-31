@@ -69,6 +69,22 @@
     });
   }
 
+  // Badge page: point each snippet at the provider's own profile (?p=<slug>).
+  var codes = document.querySelectorAll("[data-badge-code]");
+  if (codes.length) {
+    var slug = new URLSearchParams(location.search).get("p") || "";
+    var valid = /^[a-z0-9-]+-\d{10}$/.test(slug);
+    codes.forEach(function (box) {
+      if (valid) box.value = box.value.replace(/href="([^"]*)\/"/, 'href="$1/provider/' + slug + '/"');
+      var copy = box.parentNode.querySelector("[data-badge-copy]");
+      copy.addEventListener("click", function () {
+        navigator.clipboard.writeText(box.value).then(function () { copy.textContent = "Copied"; });
+      });
+    });
+    var note = document.querySelector("[data-badge-note]");
+    if (note && valid) note.textContent = "These snippets link to your profile.";
+  }
+
   // Report / claim forms post to the Apps Script endpoint named in <meta name="forms-endpoint">.
   var params = new URLSearchParams(location.search);
   var endpointMeta = document.querySelector('meta[name="forms-endpoint"]');

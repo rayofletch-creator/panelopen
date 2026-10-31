@@ -464,7 +464,7 @@ def provider_page(ctx, p, city_path, city, peers=()):
 </div>
 <section class="panel"><h2>Specialties on record</h2><p>{e(', '.join(p['specialties']))}</p><p class="muted small">NPI {p['npi']} · <a href="https://npiregistry.cms.hhs.gov/provider-view/{p['npi']}" rel="nofollow noopener" target="_blank">View federal NPI record</a></p></section>
 {related(ctx, p, city_path, city, peers)}
-<aside class="claim"><div><h2>Are you {e(p['name'])}?</h2><p>Confirm your availability in 30 seconds so patients stop calling when you're full — and get a booking link on this page.</p></div><a class="btn" href="/for-providers/?npi={p['npi']}">Claim this profile</a></aside>
+<aside class="claim"><div><h2>Are you {e(p['name'])}?</h2><p>Confirm your availability in 30 seconds so patients stop calling when you're full — and get a booking link on this page. Or <a href="/for-providers/badge/?p={p['slug']}">add a badge to your website</a>.</p></div><a class="btn" href="/for-providers/?npi={p['npi']}">Claim this profile</a></aside>
 </article>"""
     desc = f"{full} — {cats} in {city}. " + (f"Listed as accepting new patients with {accepting}. " if accepting else "") + f"Confidence: {LEVEL_LABEL[p['level']].lower()}."
     short = p["name"] + (", " + re.split(r"[ ,]", p["credential"])[0] if p["credential"] else "")
@@ -527,13 +527,27 @@ def static_pages(ctx, city_path, city):
 """ + (f'<p class="muted small">Already subscribed? <a href="{e(ctx["payments"]["portal"])}" rel="noopener">Manage your plan or cancel</a>.</p>' if ctx["payments"].get("portal") else "") + """
 <section class="panel" id="claim"><h2>Claim your profile</h2><form class="stack" data-form><input type="hidden" name="kind" value="claim"><input type="hidden" name="plan" data-plan value="free"><div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div><label>NPI number<input name="npi" inputmode="numeric" maxlength="10" required></label><label>Work email<input type="email" name="email" required></label><button class="btn" type="submit">Send verification</button><p class="muted small" data-form-msg>We verify ownership by contacting the phone or email on your NPI record.</p></form></section>""",
          [("Home", "/"), ("For providers", "/for-providers/")])
+    snippet = lambda v: e(f'<a href="{ctx["site"]}/"><img src="{ctx["site"]}/assets/badge-{v}.svg" alt="Find us on Now Accepting" width="200" height="56"></a>')
+    page(ctx, "/for-providers/badge/", f"Add a Now Accepting Badge to Your Website | {BRAND}",
+         "A free badge for your practice website that sends patients to your Now Accepting profile.",
+         f"""<article class="prose"><h1>Add a badge to your website</h1>
+<p class="lede">Show patients where to check your insurance and availability. The badge is free and optional, and it has no effect on your confidence score or your place in results.</p></article>
+<p class="muted small" data-badge-note>These snippets link to our home page. Open this page from your profile, using the "add a badge" link, to link to your own listing.</p>
+<div class="badge-opts">
+<section class="panel"><h2>Light</h2><div class="badge-preview light"><img src="/assets/badge-light.svg" alt="Find us on Now Accepting" width="200" height="56"></div><textarea class="badge-code" readonly aria-label="Light badge HTML" data-badge-code>{snippet("light")}</textarea><button class="btn btn-ghost btn-sm" type="button" data-badge-copy>Copy code</button></section>
+<section class="panel"><h2>Dark</h2><div class="badge-preview dark"><img src="/assets/badge-dark.svg" alt="Find us on Now Accepting" width="200" height="56"></div><textarea class="badge-code" readonly aria-label="Dark badge HTML" data-badge-code>{snippet("dark")}</textarea><button class="btn btn-ghost btn-sm" type="button" data-badge-copy>Copy code</button></section>
+</div>
+<article class="prose"><h2>How to add it</h2><ol><li>Copy the code for the version that suits your site.</li><li>Paste it into your website's HTML, using a custom HTML or embed block if you use a site builder.</li><li>Publish, then click the badge to check that it opens your profile.</li></ol>
+<p>Your web person can also download the <a href="/assets/badge-light.svg">light</a> or <a href="/assets/badge-dark.svg">dark</a> image directly.</p></article>""",
+         [("Home", "/"), ("For providers", "/for-providers/"), ("Badge", "/for-providers/badge/")], noindex=True)
     page(ctx, "/for-providers/welcome/", f"Welcome | {BRAND}",
          "Your subscription is active.",
          """<article class="prose"><h1>You're in — thank you</h1>
 <p class="lede">Your subscription is active. Stripe has emailed your receipt.</p>
 <h2>What happens next</h2><ol><li>We verify you own the listing by contacting the phone or email on your NPI record — usually within one business day.</li>
 <li>Once verified, we'll set up your booking link and availability on your profile.</li>
-<li>You can update your card or cancel any time from your billing portal.</li></ol>
+<li>You can update your card or cancel any time from your billing portal.</li>
+<li>If you like, <a href="/for-providers/badge/">add a free badge</a> to your practice website.</li></ol>
 <p><a class="btn" href="/">Back to Now Accepting</a> """ + (f'<a class="btn btn-ghost" href="{e(ctx["payments"]["portal"])}" rel="noopener">Manage subscription</a>' if ctx["payments"].get("portal") else "") + """</p></article>""",
          [("Home", "/"), ("For providers", "/for-providers/"), ("Welcome", "/for-providers/welcome/")], noindex=True)
     page(ctx, "/report/", f"Report a Call Outcome | {BRAND}",
@@ -759,7 +773,7 @@ def report_page(ctx, raws, providers):
 <div class="table-wrap"><table><thead><tr><th>Insurer</th><th>Listings checked</th><th>Marked accepting</th><th>Marked not accepting</th></tr></thead><tbody>{rows}</tbody></table></div>
 <h2>Why it matters</h2><p>A 2023 U.S. Senate Finance Committee secret-shopper study found 80% of mental health listings in Medicare Advantage directories were inaccurate or unreachable. These "ghost networks" leave patients calling provider after provider. Our numbers measure consistency between public data sources rather than phone calls, so they show where to be cautious rather than a definitive error rate.</p>
 <h2>Methodology</h2><p>Source data: insurer provider directories published under the CMS Interoperability and Patient Access rule (Da Vinci PDex Plan-Net FHIR APIs), and the CMS NPPES NPI registry, retrieved {fmt_date(ctx['generated'])}. Up to 1,500 directory locations per insurer per city were sampled. Providers were matched by NPI. A listing earns one point per check passed; see <a href="/how-we-verify/">how we verify</a>. Deactivated NPIs were excluded.</p>
-<h2>Use this data</h2><p>Journalists and researchers may cite these figures with a link to this page. For the underlying numbers by city, insurer or specialty, use the contact details on our <a href="/about/">about page</a>.</p>
+<h2>Use this data</h2><p>Journalists and researchers may cite these figures with a link to this page.</p>
 <p><a class="btn" href="/">Search providers accepting new patients</a></p></article>"""
     ld = {"@context": "https://schema.org", "@type": "Article", "headline": headline, "datePublished": ctx["generated"], "dateModified": ctx["generated"],
           "author": {"@type": "Organization", "name": BRAND, "url": ctx["site"] + "/"}, "publisher": {"@type": "Organization", "name": BRAND},
