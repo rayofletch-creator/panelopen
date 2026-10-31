@@ -124,11 +124,13 @@ h3 { font-size: 1.05rem; font-weight: 650; }
 .dark-top main > .crumbs { display: none; }
 @media (max-width: 720px) {
   .top { position: static; backdrop-filter: none; }
-  .top-in { display: grid; grid-template-columns: auto auto auto 1fr auto; gap: 8px 18px; min-height: 0; padding-top: 10px; padding-bottom: 10px; }
+  .top-in { flex-wrap: wrap; gap: 6px 18px; min-height: 0; padding-top: 10px; padding-bottom: 8px; }
+  .top-in::after { content: ""; order: 3; flex-basis: 100%; height: 0; }
   .top-nav { display: contents; font-size: .9rem; }
-  .logo { grid-column: 1 / 5; grid-row: 1; }
-  .top-nav .top-cta { grid-column: 5; grid-row: 1; padding: 6px 14px; font-size: .88rem; }
-  .top-nav a:not(.top-cta) { grid-row: 2; padding: 4px 0; }
+  .top-nav a { white-space: nowrap; }
+  .logo { order: 1; margin-right: auto; }
+  .top-nav .top-cta { order: 2; padding: 6px 14px; font-size: .88rem; }
+  .top-nav a:not(.top-cta) { order: 4; padding: 2px 0; }
 }
 
 /* footer */
