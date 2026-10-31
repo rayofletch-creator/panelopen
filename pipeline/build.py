@@ -320,7 +320,7 @@ def card(ctx, p):
     return f"""<li class="card" {attrs}>
   {monogram(p['name'], p['npi'])}
   <div class="card-main">
-    <h3><a href="/provider/{p['slug']}/">{e(p['name'])}{', ' + e(p['credential']) if p['credential'] else ''}</a></h3>
+    <h2><a href="/provider/{p['slug']}/">{e(p['name'])}{', ' + e(p['credential']) if p['credential'] else ''}</a></h2>
     <p class="card-sub">{e(cats)}{' · Telehealth' if p['telehealth'] else ''}</p>
     <p class="card-ins"><span class="lamp" aria-hidden="true"></span><span>Listed as accepting with <strong>{e(', '.join(accepting))}</strong></span></p>
     <div class="card-foot">{score_tag(p)}<p class="card-loc muted">{where}{' · +' + str(len(p['locations']) - 1) + ' more' if len(p['locations']) > 1 else ''}</p></div>
@@ -407,6 +407,50 @@ def insights(ctx, acc, fixed_cat=None, fixed_ins=None):
     return f'<section class="glance"><h2>At a glance</h2><ul>{"".join(facts)}</ul><p class="muted small">Computed from insurer directories and the NPI registry on {fmt_date(ctx["generated"])}.</p></section>'
 
 
+def list_scope(ctx, base_path):
+    """Attributes telling app.js which full list a paginated page belongs to."""
+    parts = base_path.strip("/").split("/")
+    if parts[0] == "insurance":
+        return f'data-scope="{ctx["base"]}/data/all.json" data-fins="{e(parts[1])}"'
+    st, rest = parts[0], parts[1:]
+    attrs = [f'data-scope="{ctx["base"]}/data/{e(st)}.json"']
+    if "telehealth" in rest:
+        attrs.append('data-ftele="1"')
+        rest = [x for x in rest if x != "telehealth"]
+    if rest and rest[-1] in PAYER_SLUG.values():
+        attrs.append(f'data-fins="{e(rest.pop())}"')
+    if rest and rest[-1] in CATS:
+        attrs.append(f'data-fcat="{e(rest.pop())}"')
+    if rest:
+        attrs.append(f'data-src="/{e(st)}/{e(rest[0])}/"')
+    return " ".join(attrs)
+
+
+def write_search_data(ctx, providers):
+    """Compact listings per state, loaded only when someone filters a long list."""
+    slug_of = PAYER_SLUG
+    rows = []
+    for p in providers:
+        if p["level"] == "none":
+            continue
+        loc = p["locations"][0] if p["locations"] else None
+        where = "Telehealth only" if loc and loc["virtual"] and len(p["locations"]) == 1 else (f'{tidy_address(loc["line"])}, {loc["city"]} {loc["zip"]}' if loc else "")
+        if len(p["locations"]) > 1:
+            where += f' · +{len(p["locations"]) - 1} more'
+        rows.append({"s": p["slug"], "n": p["name"], "c": p["credential"], "d": int(p["npi"]) % 5, "t": p["cats"], "h": 1 if p["telehealth"] else 0,
+                     "i": [slug_of[k] for k in p["accepting_payers"]], "l": p["level"], "k": p["score"], "p": p["phone"], "w": where,
+                     "a": sorted({l["zip"] for l in p["locations"]}), "g": p["gender"][:1].lower(), "f": p["src"]})
+    meta = {"cats": {c: v[1].capitalize() for c, v in CATS.items()}, "levels": LEVEL_LABEL,
+            "payers": {PAYER_SLUG[k]: ctx["payers"][k] for k in ctx["active_payers"]}}
+    os.makedirs(os.path.join(DIST, "data"), exist_ok=True)
+    states = {path.split("/")[1] for r in rows for path in r["f"]}
+    for st in states:
+        with open(os.path.join(DIST, "data", f"{st}.json"), "w") as f:
+            json.dump({**meta, "providers": [r for r in rows if any(path.startswith(f"/{st}/") for path in r["f"])]}, f, separators=(",", ":"))
+    with open(os.path.join(DIST, "data", "all.json"), "w") as f:
+        json.dump({**meta, "providers": rows}, f, separators=(",", ":"))
+
+
 def listing_pages(ctx, base_path, crumbs, h1, intro, title, desc, providers, faq=None, fixed_cat=None, fixed_ins=None, extra_links=""):
     acc = [p for p in providers if p["level"] != "none"]
     pages = max(1, (len(acc) + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -431,7 +475,7 @@ def listing_pages(ctx, base_path, crumbs, h1, intro, title, desc, providers, faq
             {"@type": "ListItem", "position": i * PAGE_SIZE + n + 1, "url": ctx["site"] + f"/provider/{p['slug']}/", "name": p["name"]} for n, p in enumerate(chunk)]}
         body = f"""<header class="hero-sm"><h1>{e(h1)}{'' if i == 0 else f' — page {i + 1}'}</h1><p class="lede">{intro}</p>{stats}</header>
 {filters(ctx, acc, fixed_cat, fixed_ins)}
-<ol class="cards" data-list start="{i * PAGE_SIZE + 1}">{items}</ol>
+<ol class="cards" data-list start="{i * PAGE_SIZE + 1}"{(" " + list_scope(ctx, base_path)) if pages > 1 else ""}>{items}</ol>
 <p class="noresults" data-noresults hidden>No matches on this page. Clear a filter or try the next page.</p>
 {pager}
 {insights(ctx, acc, fixed_cat, fixed_ins) if i == 0 else ''}
@@ -622,6 +666,8 @@ def static_pages(ctx, city_path, city):
 <h2>How we make money</h2><ul><li><strong>Provider subscriptions.</strong> Providers can pay for booking links, analytics and directory-error alerts. Paying never changes a confidence score.</li>
 <li><strong>Labelled partner referrals.</strong> When local openings are thin, we may show telehealth services that accept insurance and earn a referral fee. These are always marked.</li>
 <li><strong>Data partnerships.</strong> We sell aggregated directory-accuracy reports to employers, brokers and researchers. We never sell anything about you.</li></ul>
+<h2>Where the data comes from</h2><p>Listings come from the provider directories insurers are required to publish, checked against the federal NPI registry. Every listing is scored using <a href="/how-we-verify/">published criteria</a>. We don't call every provider, so a high score means a listing's public records hold up, not that an appointment is guaranteed.</p>
+<h2>Corrections</h2><p>Found something wrong? <a href="/report/">Tell us what happened when you called</a>. Providers can <a href="/for-providers/">claim and correct their listing</a> for free.</p>
 <h2>Not medical advice</h2><p>Listings are informational. Always confirm coverage with your insurer.</p></article>""",
          [("Home", "/"), ("About", "/about/")])
     page(ctx, "/privacy/", f"Privacy | {BRAND}", f"{BRAND} doesn't use ad trackers, retargeting pixels or sell personal data. Searching for care stays private: no account, no health information collected.",
@@ -1035,6 +1081,8 @@ def build(raws, site, partners, forms_url, reports, payments):
 {link_grid("Search by city", [(name, path, "") for name, path in ctx["cities"]])}
 {link_grid("Guides", [(t, p, "") for t, p in GUIDE_LINKS])}""", noindex=True)
 
+    write_search_data(ctx, providers)
+
     # SEO plumbing: a sitemap index so Search Console reports each section separately
     groups = {"providers": [p for p in ctx["sitemap"] if p.startswith("/provider/")],
               "listings": [p for p in ctx["sitemap"] if p.count("/") >= 3 and not p.startswith(("/provider/", "/guides/", "/reports/"))],
@@ -1052,7 +1100,7 @@ def build(raws, site, partners, forms_url, reports, payments):
             f.write(f"<sitemap><loc>{ctx['site']}/sitemap-{name}.xml</loc><lastmod>{ctx['generated']}</lastmod></sitemap>\n")
         f.write("</sitemapindex>\n")
     with open(os.path.join(DIST, "robots.txt"), "w") as f:
-        f.write(f"User-agent: *\nAllow: /\nDisallow: {ctx['base']}/report/\nSitemap: {ctx['site']}/sitemap.xml\n")
+        f.write(f"User-agent: *\nAllow: /\nDisallow: {ctx['base']}/report/\nDisallow: {ctx['base']}/data/\nSitemap: {ctx['site']}/sitemap.xml\n")
     return providers, ctx, city_stats
 
 

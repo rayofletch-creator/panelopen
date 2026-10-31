@@ -38,6 +38,7 @@ so links from credible sites matter more than anything else on this list.
 - Audit (Oct 29): 5,407 pages, 0 broken internal links, 0 invalid JSON-LD, 0 duplicate titles
 - State hubs (/co/, /tx/) with statewide care-type and insurer pages; breadcrumbs run Home > State > City
 - Online-care pages (/co/telehealth/, /tx/telehealth/) by care type and insurer, plus a guide on online therapy coverage
+- Lighthouse (Oct 31, local): performance 92-99, accessibility 98-100, best practices and SEO 100
 - Audit (Oct 31, with Humana): 11,249 pages, 6,354 indexable, 0 broken internal links, 0 invalid JSON-LD, 0 duplicate titles
 
 ## Do this week (needs you)
