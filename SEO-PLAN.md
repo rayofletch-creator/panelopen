@@ -38,7 +38,7 @@ so links from credible sites matter more than anything else on this list.
 - Audit (Oct 29): 5,407 pages, 0 broken internal links, 0 invalid JSON-LD, 0 duplicate titles
 - State hubs (/co/, /tx/) with statewide care-type and insurer pages; breadcrumbs run Home > State > City
 - Online-care pages (/co/telehealth/, /tx/telehealth/) by care type and insurer, plus a guide on online therapy coverage
-- Audit (Oct 30): 10,046 pages, 5,254 indexable, 0 broken internal links, 0 invalid JSON-LD, 0 duplicate titles
+- Audit (Oct 31, with Humana): 11,249 pages, 6,354 indexable, 0 broken internal links, 0 invalid JSON-LD, 0 duplicate titles
 
 ## Do this week (needs you)
 
@@ -61,12 +61,12 @@ Lead with the data report. It's original, local and newsworthy.
 Denver Post, Colorado Sun, Denverite, CPR News, Axios Denver, 9News, Denver7,
 Colorado Springs Gazette, Boulder Daily Camera, Coloradoan (Fort Collins).
 
-> Subject: Data: only 22% of Colorado provider listings pass basic accuracy checks
+> Subject: Data: only 33% of Colorado providers pass basic directory accuracy checks
 >
 > Hi [name], I run Now Accepting, which pulls the provider directories insurers
 > are required to publish and cross-checks them against the federal NPI registry.
-> In 4,207 Colorado listings, only 22% passed enough checks to be considered
-> reliable, the listed phone number matched the federal record just 33% of the
+> Of 5,635 Colorado providers, only 33% passed enough checks to earn high
+> confidence, the listed phone number matched the federal record just 34% of the
 > time, and UnitedHealthcare marks every provider as "accepting new patients."
 > Full methodology: nowacceptingpatients.com/reports/colorado-insurance-directory-accuracy/
 > Happy to pull numbers for a specific city, insurer or specialty.
