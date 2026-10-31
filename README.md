@@ -52,7 +52,7 @@ Repo variables (Settings → Secrets and variables → Actions → Variables):
   forms (see `forms/Code.gs`). Submissions land in the "Now Accepting
   submissions" Google Sheet. A daily build pulls anonymous report counts back
   into the confidence scores.
-- `MAX_LOCATIONS`: insurer locations pulled per insurer (default 1500). Raise it
+- `MAX_LOCATIONS`: insurer locations pulled per insurer (default 1500). A refresh that finds under half of an insurer's previous listings keeps the previous data, so a lower limit won't erase a deeper pull. Raise it
   for fuller coverage; the run gets slower.
 
 ## SEO structure

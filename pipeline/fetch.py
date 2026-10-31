@@ -62,6 +62,7 @@ class Blocked(Exception):
 
 
 PAUSE = 0.0  # seconds to wait after each live request (set per insurer)
+MIN_KEEP_SHARE = 0.5
 
 
 def get(url, retries=3):
@@ -224,6 +225,12 @@ def nppes(npi):
     }
 
 
+def keep_previous(new_count, prior_count):
+    """A run that finds under half of last run's listings is a partial pull (an API
+    failure or a lower location limit), not providers leaving, so it can't replace them."""
+    return new_count == 0 or new_count < prior_count * MIN_KEEP_SHARE
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--city", default="Denver")
@@ -250,11 +257,12 @@ def main():
         except Exception as e:
             print(f"[{key}] failed: {e}", file=sys.stderr)
             got = []
-        if got:
+        prior = sum(1 for l in previous["listings"] if l["payer"] == key)
+        if keep_previous(len(got), prior):
+            print(f"[{key}] only {len(got)} listings against {prior} last run; keeping previous listings", file=sys.stderr)
+        else:
             listings += got
             fetched.add(key)
-        else:
-            print(f"[{key}] no data this run; keeping previous listings", file=sys.stderr)
     listings += [l for l in previous["listings"] if l["payer"] not in fetched]
     global PAUSE
     PAUSE = 0.0
