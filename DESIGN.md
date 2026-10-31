@@ -1,16 +1,14 @@
 # Now Accepting: design direction
 
 ## The idea
-On this site, the hospital switchboard, where a lit lamp means someone is there to answer, becomes the directory. Each provider is a lamp, and the lit ones are the ones to call first.
-
-The live thing is the home switchboard: choose care type, insurance and city, and see one lamp per real provider plus the first three to call.
+The product is the picture. The first screen is a working search console over real data: choose care type, insurance and city, and see one signal dot per real provider plus the first three to call.
 
 ## How it's built
-- **Direction:** colour chapters and a mosaic masthead (tasteskill, seed 2139240464). Type redrawn from a soft rounded face to League Spartan and Figtree, both self-hosted under the OFL.
-- **Colour:** from a real switchboard: enamel green, bakelite, pine and lamp amber, with hard edges between fields.
-- **Pictures:** real archival photographs, credited on /about/#credits. They show the history of the trade, never our team or a listed provider, and no photo sits next to a provider's name.
-- **Shapes:** square corners, flat fills and tone steps instead of outlines, shadows and rounded cards. Lit lamps on the dark board may glow slightly, because that's what lamps do.
-- **Listings:** banded rows, like a printed directory. No initials badges.
+- **Direction:** "The product performs" (tasteskill). The hero blueprint was replaced because its controls adjusted headline type, which doesn't apply here. The footer keeps full links for navigation and the crisis line.
+- **Colour:** healthcare teal and blue on cool white, with a deep navy console. Signal cyan appears only on data and live status.
+- **Type:** Archivo, self-hosted under the OFL.
+- **Pictures:** none, by owner's choice. Real interface fragments and data carry the page.
+- **Shapes:** small 4px radius, tone steps instead of shadows, and a soft glow only on lit signal dots.
 
 ## Rules that keep providers comfortable
 - The score rates a listing's public data, never quality of care. Say so wherever it could be misread.

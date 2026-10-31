@@ -195,8 +195,27 @@
     });
   }
 
+  // Common questions: the selected answer shows in the pane, or under the question on a phone.
+  var qa = document.querySelector("[data-qa]");
+  if (qa) {
+    var pane = qa.querySelector("[data-qa-pane]");
+    var pick = function (btn) {
+      qa.querySelectorAll("[data-q]").forEach(function (b) {
+        var on = b === btn;
+        b.setAttribute("aria-expanded", on ? "true" : "false");
+        b.nextElementSibling.classList.toggle("open", on);
+      });
+      pane.textContent = btn.nextElementSibling.textContent;
+    };
+    qa.querySelectorAll("[data-q]").forEach(function (b) {
+      b.addEventListener("click", function () { pick(b); });
+      b.addEventListener("mouseenter", function () { pick(b); });
+      b.addEventListener("focus", function () { pick(b); });
+    });
+  }
+
   // Parts of a section rise in turn as it enters. Content stays visible without script.
-  document.querySelectorAll("main .links, main .faq, main .glance, main .panel, main .tier, main .values > div, main .cards > .card:nth-child(n+6)").forEach(function (el) {
+  document.querySelectorAll("main .links, main .faq, main .glance, main .panel, main .tier, main .values > div, main [data-list] > .card:nth-child(n+6)").forEach(function (el) {
     el.classList.add("rise");
   });
   var rising = document.querySelectorAll(".rise");
